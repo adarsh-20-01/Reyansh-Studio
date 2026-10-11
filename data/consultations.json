@@ -1,0 +1,37 @@
+[
+  {
+    "id": "lead_1791726604900",
+    "name": "Sneha Kulkarni (Test Lead)",
+    "email": "sneha.kulkarni@example.com",
+    "phone": "+91 9892558704",
+    "service": "Kitchen Cabinet",
+    "message": "Inquiring about premium kitchen cabinet consultation and custom 3D design quote.",
+    "product_title": "",
+    "photo_filename": "",
+    "photo_url": "",
+    "has_photo": false,
+    "createdAt": "2026-10-11T13:50:04.900157Z",
+    "formattedDate": "Sunday, 11 October 2026 at 07:20 PM",
+    "status": "new",
+    "emailSent": true,
+    "client_ip": "127.0.0.1"
+  },
+  {
+    "id": "lead_1791723192316",
+    "name": "adarsh",
+    "email": "adarsg@gmail.com",
+    "phone": "7781924892",
+    "service": "T. V. Units",
+    "message": "Hi Reyansh Studio, I am interested in your T. V. Units services. Please share custom pricing, design options, and schedule a consultation.",
+    "product_title": "T. V. Units - Architectural Media Wall Partition",
+    "photo_filename": "hero-bg.png",
+    "photo_url": "http://localhost:5173/assets/hero-bg.png",
+    "has_photo": true,
+    "createdAt": "2026-10-11T12:53:12.316385Z",
+    "formattedDate": "Sunday, 11 October 2026 at 06:23 PM",
+    "status": "contacted",
+    "emailSent": true,
+    "client_ip": "127.0.0.1",
+    "updatedAt": "2026-10-11T13:50:01.694986Z"
+  }
+]
