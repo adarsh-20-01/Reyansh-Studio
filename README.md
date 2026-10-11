@@ -107,7 +107,7 @@ Reyansh-Studio/
 ### 2. Installation
 ```bash
 # Clone the repository
-git clone https://github.com/Amanroy2394/Reyansh-Studio.git
+git clone https://github.com/adarsh-20-01/Reyansh-Studio.git
 cd Reyansh-Studio
 
 # Install frontend dependencies
