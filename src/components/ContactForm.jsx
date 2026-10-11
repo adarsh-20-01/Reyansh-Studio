@@ -29,12 +29,20 @@ export default function ContactForm() {
   const [submittedName, setSubmittedName] = useState('')
   const [serverOnline, setServerOnline] = useState(null)
 
+  const API_BASE_URL = (
+    import.meta.env.VITE_API_BASE_URL ||
+    "https://reyansh-studio.onrender.com"
+  ).replace(/\/+$/, "");
+
   useEffect(() => {
-    fetch('/api/health')
-      .then(r => r.ok ? r.json() : Promise.reject())
+    fetch(`${API_BASE_URL}/api/health`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Backend unavailable");
+        return response.json();
+      })
       .then(() => setServerOnline(true))
-      .catch(() => setServerOnline(false))
-  }, [])
+      .catch(() => setServerOnline(false));
+  }, []);
 
   const handle = e => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -72,7 +80,7 @@ export default function ContactForm() {
         photo_filename: attachedPhoto?.name || '',
       }
 
-      const response = await fetch('/api/contact', {
+      const response = await fetch(`${API_BASE_URL}/api/contact`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,8 +92,8 @@ export default function ContactForm() {
       const data = await response.json().catch(() => null)
 
       if (!response.ok || !data || !data.success) {
-        const errorText = (data && data.message) 
-          ? data.message 
+        const errorText = (data && data.message)
+          ? data.message
           : `Server returned error (${response.status}). Please try again or reach us directly on WhatsApp.`
         throw new Error(errorText)
       }
@@ -136,36 +144,36 @@ export default function ContactForm() {
             Your consultation request has been sent successfully to <strong>Reyansh Studio</strong>. Our lead designer will review your details and reach out to you shortly.
           </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyContent: 'center' }}>
-              <a
-                href="https://wa.me/917887556060?text=Hi%20Reyansh%20Studio!%20I%20just%20submitted%20a%20consultation%20request%20on%20your%20website."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-gold"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  textDecoration: 'none',
-                  background: '#25D366',
-                  color: '#fff',
-                  borderColor: '#25D366',
-                }}
-              >
-                <MessageSquare size={18} /> Quick Chat on WhatsApp (+91 7887556060)
-              </a>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyContent: 'center' }}>
+            <a
+              href="https://wa.me/917887556060?text=Hi%20Reyansh%20Studio!%20I%20just%20submitted%20a%20consultation%20request%20on%20your%20website."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-gold"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                textDecoration: 'none',
+                background: '#25D366',
+                color: '#fff',
+                borderColor: '#25D366',
+              }}
+            >
+              <MessageSquare size={18} /> Quick Chat on WhatsApp (+91 7887556060)
+            </a>
 
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="btn-outline"
-                  style={{ fontSize: '0.8rem', padding: '9px 20px', cursor: 'pointer' }}
-                >
-                  Send Another Inquiry
-                </button>
-              </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="btn-outline"
+                style={{ fontSize: '0.8rem', padding: '9px 20px', cursor: 'pointer' }}
+              >
+                Send Another Inquiry
+              </button>
             </div>
+          </div>
         </motion.div>
       ) : (
         <motion.form
