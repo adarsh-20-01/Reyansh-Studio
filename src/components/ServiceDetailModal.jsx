@@ -27,6 +27,7 @@ export default function ServiceDetailModal({ service, isOpen, onClose }) {
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+  const [emailNotice, setEmailNotice] = useState('')
 
   useEffect(() => {
     if (service) {
@@ -40,6 +41,7 @@ export default function ServiceDetailModal({ service, isOpen, onClose }) {
       })
       setSent(false)
       setError('')
+      setEmailNotice('')
     }
   }, [service])
 
@@ -62,9 +64,10 @@ Please let me know pricing, custom options, and how we can get started.`
     if (loading) return
     setLoading(true)
     setError('')
+    setEmailNotice('')
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    const timeoutId = setTimeout(() => controller.abort(), 20000)
 
     try {
       const payload = {
@@ -92,14 +95,22 @@ Please let me know pricing, custom options, and how we can get started.`
       clearTimeout(timeoutId)
       const data = await res.json().catch(() => null)
 
-      if (!res.ok || !data || !data.success) {
+      if (data && (data.success || data.saved)) {
+        setSent(true)
+        if (data.emailSent === false) {
+          setEmailNotice(
+            data.notice ||
+              'Your enquiry has been safely saved in our studio database! Email notification may be slightly delayed, but our team can view your enquiry directly in our admin portal.'
+          )
+        } else {
+          setEmailNotice('')
+        }
+      } else {
         throw new Error(
           (data && data.message) ||
             `Failed to send enquiry (${res.status}). Server might be starting up, please try again or connect via WhatsApp.`
         )
       }
-
-      setSent(true)
     } catch (err) {
       clearTimeout(timeoutId)
       console.error('Service enquiry failed:', err)
@@ -517,11 +528,30 @@ Please let me know pricing, custom options, and how we can get started.`
                     <CheckCircle size={48} style={{ margin: '0 auto' }} />
                   </div>
                   <h4 style={{ color: '#fff', fontSize: '1.2rem', margin: '0 0 6px', fontFamily: 'var(--font-heading)' }}>
-                    Enquiry & Photo Delivered!
+                    Enquiry & Photo Received!
                   </h4>
-                  <p style={{ color: '#d1d5db', fontSize: '0.85rem', lineHeight: 1.5, margin: '0 auto 18px' }}>
-                    Your request for <strong>{service.title}</strong> has been emailed to <strong>Reyansh Studio</strong>. Our lead consultant will reach out to you shortly.
+                  <p style={{ color: '#d1d5db', fontSize: '0.85rem', lineHeight: 1.5, margin: '0 auto 16px' }}>
+                    Your request for <strong>{service.title}</strong> has been received by <strong>Reyansh Studio</strong>. Our lead consultant will reach out to you shortly.
                   </p>
+                  {emailNotice && (
+                    <div
+                      style={{
+                        background: 'rgba(201, 169, 110, 0.12)',
+                        border: '1px solid rgba(201, 169, 110, 0.35)',
+                        borderRadius: 6,
+                        padding: '10px 14px',
+                        maxWidth: 420,
+                        margin: '0 auto 18px',
+                        fontSize: '0.8rem',
+                        color: '#e5e7eb',
+                        lineHeight: 1.5,
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ color: 'var(--gold, #c9a96e)', fontWeight: 600 }}>Note: </span>
+                      {emailNotice}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                     <a
                       href={`https://wa.me/917887556060?text=${encodeURIComponent(waText)}`}

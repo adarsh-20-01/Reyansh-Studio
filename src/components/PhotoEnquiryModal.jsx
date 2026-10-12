@@ -13,6 +13,7 @@ export default function PhotoEnquiryModal({ item, isOpen, onClose }) {
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+  const [emailNotice, setEmailNotice] = useState('')
 
   useEffect(() => {
     if (item) {
@@ -24,6 +25,7 @@ export default function PhotoEnquiryModal({ item, isOpen, onClose }) {
       })
       setSent(false)
       setError('')
+      setEmailNotice('')
     }
   }, [item])
 
@@ -48,9 +50,10 @@ Please let me know pricing, dimensions, and fabric options.`
     if (loading) return
     setLoading(true)
     setError('')
+    setEmailNotice('')
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    const timeoutId = setTimeout(() => controller.abort(), 20000)
 
     try {
       const payload = {
@@ -78,19 +81,27 @@ Please let me know pricing, dimensions, and fabric options.`
       clearTimeout(timeoutId)
       const data = await res.json().catch(() => null)
 
-      if (!res.ok || !data || !data.success) {
+      if (data && (data.success || data.saved)) {
+        setSent(true)
+        if (data.emailSent === false) {
+          setEmailNotice(
+            data.notice ||
+              'Your enquiry is safely recorded in our studio database! Email notification may be slightly delayed, but our team can view your enquiry directly in our admin portal.'
+          )
+        } else {
+          setEmailNotice('')
+        }
+      } else {
         throw new Error(
           (data && data.message) ||
             `Failed to send enquiry (${res.status}). Server might be starting up, please try again or connect directly via WhatsApp.`
         )
       }
-
-      setSent(true)
     } catch (err) {
       clearTimeout(timeoutId)
       console.error('Enquiry failed:', err)
       if (err.name === 'AbortError') {
-        setError('Server request timed out. If the server was sleeping, please try once more or reach us on WhatsApp.')
+        setError('Server request timed out. Please try once more or reach us directly on WhatsApp.')
       } else {
         setError(err.message || 'Unable to deliver enquiry. Please check your network or try WhatsApp.')
       }
@@ -287,12 +298,32 @@ Please let me know pricing, dimensions, and fabric options.`
                   <CheckCircle size={52} style={{ margin: '0 auto' }} />
                 </div>
                 <h3 style={{ color: '#fff', fontSize: '1.4rem', margin: '0 0 8px', fontFamily: 'var(--font-heading)' }}>
-                  Enquiry & Photo Delivered!
+                  Enquiry & Photo Received!
                 </h3>
-                <p style={{ color: 'var(--text-muted-light, #d1d5db)', fontSize: '0.92rem', lineHeight: 1.6, maxWidth: 420, margin: '0 auto 20px' }}>
-                  Thank you! Your enquiry for <strong>{item.title}</strong> has been emailed with the design photo to{' '}
+                <p style={{ color: 'var(--text-muted-light, #d1d5db)', fontSize: '0.92rem', lineHeight: 1.6, maxWidth: 420, margin: '0 auto 16px' }}>
+                  Thank you! Your enquiry for <strong>{item.title}</strong> has been received by{' '}
                   <span style={{ color: 'var(--gold, #c9a96e)' }}>Reyansh Studio</span>. Our team will review your specifications and get back to you shortly.
                 </p>
+
+                {emailNotice && (
+                  <div
+                    style={{
+                      background: 'rgba(201, 169, 110, 0.12)',
+                      border: '1px solid rgba(201, 169, 110, 0.35)',
+                      borderRadius: 8,
+                      padding: '10px 14px',
+                      maxWidth: 440,
+                      margin: '0 auto 20px',
+                      fontSize: '0.82rem',
+                      color: '#e5e7eb',
+                      lineHeight: 1.5,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ color: 'var(--gold, #c9a96e)', fontWeight: 600 }}>Note: </span>
+                    {emailNotice}
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <a

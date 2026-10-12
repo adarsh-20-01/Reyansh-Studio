@@ -5,7 +5,15 @@ import nodemailer from 'nodemailer'
 import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
+import dns from 'dns'
 import { fileURLToPath } from 'url'
+
+// Force IPv4 DNS resolution first to prevent IPv6 connection hangs in cloud/container environments (e.g. Render)
+if (dns && dns.setDefaultResultOrder) {
+  try {
+    dns.setDefaultResultOrder('ipv4first')
+  } catch (_) {}
+}
 
 dotenv.config()
 
@@ -126,6 +134,30 @@ const saveCustomGallery = (list) => {
     console.error('Error writing gallery file:', err)
     return false
   }
+}
+
+// Deduplication helper: Check if an identical enquiry was submitted within the last 10 minutes
+const findRecentDuplicateLead = (email, message, product_title, windowMs = 10 * 60 * 1000) => {
+  const list = getConsultations()
+  const now = Date.now()
+  const cleanEmail = (email || '').trim().toLowerCase()
+  const cleanMessage = (message || '').trim().toLowerCase()
+  const cleanTitle = (product_title || '').trim().toLowerCase()
+
+  return list.find((lead) => {
+    const leadTime = new Date(lead.createdAt).getTime()
+    if (now - leadTime > windowMs) return false // Outside time window
+
+    const leadEmail = (lead.email || '').trim().toLowerCase()
+    const leadMessage = (lead.message || '').trim().toLowerCase()
+    const leadTitle = (lead.product_title || '').trim().toLowerCase()
+
+    const emailMatches = leadEmail === cleanEmail
+    const contentMatches =
+      (cleanMessage && leadMessage === cleanMessage) || (cleanTitle && leadTitle === cleanTitle)
+
+    return emailMatches && contentMatches
+  })
 }
 
 // Configure Multer for in-memory file uploads (15MB limit)
@@ -259,45 +291,89 @@ app.get('/api/consultations', (req, res) => {
   })
 })
 
-// Helper to create Nodemailer transporter
-const createTransporter = async () => {
+/**
+ * Dispatch an enquiry email with explicit timeouts and connection fallback.
+ * Prevents SMTP from hanging indefinitely and returns a clean result object.
+ * Does NOT log passwords, tokens, or private customer data.
+ */
+const dispatchEnquiryEmail = async (mailOptions) => {
   const user = (process.env.SMTP_USERNAME || process.env.EMAIL_USER || '').trim()
-  const pass = (process.env.SMTP_PASSWORD || process.env.EMAIL_PASS || '').replace(/\s+/g, '')
-  const host = process.env.SMTP_HOST || process.env.EMAIL_HOST
+  const pass = (process.env.SMTP_PASSWORD || process.env.EMAIL_PASS || '').replace(/\s+/g, '').trim()
+  const host = (process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com').trim()
+  const explicitPort = process.env.SMTP_PORT || process.env.EMAIL_PORT
 
-  // 1. Explicit SMTP host
-  if (host && user && pass) {
+  if (!user || !pass) {
+    console.warn('⚠️ [SMTP Diagnostic] EMAIL_USER or EMAIL_PASS not configured. Skipping email dispatch.')
+    return { sent: false, error: 'Email credentials not configured on server' }
+  }
+
+  // Common transporter factory with explicit timeouts & forced IPv4
+  const createTransportForPort = (port, secure) => {
     return nodemailer.createTransport({
       host,
-      port: Number(process.env.SMTP_PORT || process.env.EMAIL_PORT) || 587,
-      secure: process.env.EMAIL_SECURE === 'true' || process.env.SMTP_PORT === '465',
+      port,
+      secure,
       auth: { user, pass },
-    })
-  }
-
-  // 2. Well-known service (e.g. Gmail)
-  if (user && pass) {
-    return nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || 'gmail',
-      auth: { user, pass },
-    })
-  }
-
-  // 3. Fallback to Ethereal test inbox for development when credentials are not yet configured
-  try {
-    const testAccount = await nodemailer.createTestAccount()
-    return nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: {
-        user: testAccount.user,
-        pass: testAccount.pass,
+      family: 4,               // Force IPv4 to prevent cloud IPv6 black-hole connection hangs
+      connectionTimeout: 6000, // 6s max to establish TCP connection
+      greetingTimeout: 4000,   // 4s max to receive SMTP banner
+      socketTimeout: 8000,     // 8s max socket inactivity timeout
+      dnsTimeout: 3000,        // 3s max DNS resolution timeout
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2',
       },
     })
-  } catch (etherealErr) {
-    console.warn('⚠️  Ethereal test account unavailable, email dispatch will be simulated:', etherealErr.message)
-    return null
+  }
+
+  // Determine primary port and security mode
+  const primaryPort = explicitPort ? Number(explicitPort) : 465
+  const primarySecure = process.env.EMAIL_SECURE === 'true' || primaryPort === 465
+
+  console.log(`📡 [SMTP Diagnostic] Attempting delivery: host=${host}, port=${primaryPort}, secure=${primarySecure}, family=IPv4`)
+
+  // Primary attempt
+  try {
+    const transporter = createTransportForPort(primaryPort, primarySecure)
+    const info = await Promise.race([
+      transporter.sendMail(mailOptions),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`SMTP connection timed out after 7s on port ${primaryPort}`)), 7000)
+      ),
+    ])
+
+    console.log(`✅ [SMTP Diagnostic] Email delivered successfully. Message ID: ${info.messageId || 'confirmed'}`)
+    return { sent: true, messageId: info.messageId }
+  } catch (primaryErr) {
+    const safeErrorMsg = primaryErr.message || primaryErr.code || 'Connection error'
+    console.warn(`⚠️ [SMTP Diagnostic] Primary attempt failed on port ${primaryPort}: code=${primaryErr.code || 'N/A'}, message=${safeErrorMsg}`)
+
+    // If port was explicitly specified in environment, do not attempt fallback port
+    if (explicitPort) {
+      return { sent: false, error: safeErrorMsg }
+    }
+
+    // Attempt alternate standard port (587 STARTTLS if 465 timed out, or 465 SSL if 587 timed out)
+    const fallbackPort = primaryPort === 465 ? 587 : 465
+    const fallbackSecure = fallbackPort === 465
+    console.log(`🔄 [SMTP Diagnostic] Retrying via alternate port: port=${fallbackPort}, secure=${fallbackSecure}...`)
+
+    try {
+      const fallbackTransporter = createTransportForPort(fallbackPort, fallbackSecure)
+      const info = await Promise.race([
+        fallbackTransporter.sendMail(mailOptions),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`SMTP connection timed out after 6s on fallback port ${fallbackPort}`)), 6000)
+        ),
+      ])
+
+      console.log(`✅ [SMTP Diagnostic] Email delivered via fallback port ${fallbackPort}. Message ID: ${info.messageId || 'confirmed'}`)
+      return { sent: true, messageId: info.messageId }
+    } catch (fallbackErr) {
+      const fallbackSafeMsg = fallbackErr.message || fallbackErr.code || 'Fallback timeout'
+      console.warn(`⚠️ [SMTP Diagnostic] Fallback attempt also failed on port ${fallbackPort}: code=${fallbackErr.code || 'N/A'}, message=${fallbackSafeMsg}`)
+      return { sent: false, error: fallbackSafeMsg }
+    }
   }
 }
 
@@ -330,7 +406,7 @@ app.post(
       ).trim()
       const photo_data = (body.photo_data || body.photoData || '').trim()
 
-      // Validation
+      // Input Validation
       if (!name || name.length < 2) {
         return res.status(400).json({
           success: false,
@@ -353,13 +429,30 @@ app.post(
         })
       }
 
+      // 1. Prevent duplicate leads when retrying after a client-side timeout
+      const existingLead = findRecentDuplicateLead(email, message, product_title)
+      if (existingLead) {
+        console.log(`ℹ️ [Deduplication] Recognized duplicate enquiry within 10-min window from ${email}. Reusing lead ID: ${existingLead.id}`)
+        return res.status(200).json({
+          success: true,
+          saved: true,
+          id: existingLead.id,
+          emailSent: existingLead.emailSent,
+          duplicatePrevented: true,
+          message: 'Your enquiry is already safely received and recorded in our studio database. Our team will contact you shortly.',
+          notice: existingLead.emailSent
+            ? undefined
+            : 'Email notification may be delayed, but your enquiry is safely logged in our system.',
+        })
+      }
+
       const formattedDate = new Date().toLocaleString('en-IN', {
         timeZone: 'Asia/Kolkata',
         dateStyle: 'full',
         timeStyle: 'medium',
       })
 
-      // 1. Persist to storage FIRST so lead is guaranteed never to be lost
+      // 2. Persist to storage FIRST so lead is guaranteed never to be lost
       const newLead = {
         id: `lead_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         name,
@@ -390,7 +483,7 @@ app.post(
       if (photo_filename) console.log(`   Photo   : ${photo_filename}`)
       console.log(`   Message : ${newLead.message.slice(0, 100)}...\n`)
 
-      // 2. Prepare Email Notification with attachments and rich HTML
+      // 3. Prepare Email Notification with attachments and rich HTML
       const recipient = process.env.RECEIVER_EMAIL || 'reyaneshstudio@gmail.com'
       const attachments = []
       let photoSectionHtml = ''
@@ -442,113 +535,116 @@ app.post(
         `
       }
 
-      let emailStatus = { sent: false, note: '' }
+      const subjectTag = product_title ? ` [${product_title}]` : ''
+      const ownerMailOptions = {
+        from: `"Reyansh Studio Website" <${process.env.EMAIL_USER || 'reyaneshstudio@gmail.com'}>`,
+        to: recipient,
+        replyTo: email,
+        subject: `🌟 New Furniture Enquiry: ${name}${subjectTag} (${service})`,
+        attachments,
+        html: `
+          <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background-color: #121316; color: #f3f4f6; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a2e;">
+            <div style="background: linear-gradient(135deg, #1f1b13 0%, #2a2215 100%); padding: 32px 24px; text-align: center; border-bottom: 2px solid #c9a86a;">
+              <h1 style="color: #c9a86a; margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase;">REYANSH STUDIO</h1>
+              <p style="color: #d1d5db; margin: 8px 0 0; font-size: 14px;">Let Your Dream Come Alive &bull; Design &bull; Create &bull; Inspire</p>
+            </div>
+            
+            <div style="padding: 28px 24px;">
+              <p style="font-size: 15px; line-height: 1.6; margin-top: 0; color: #e5e7eb;">
+                A customer has submitted a furniture enquiry through your website:
+              </p>
 
-      try {
-        const transporter = await createTransporter()
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #1a1b20; border-radius: 8px; overflow: hidden; border: 1px solid #2e3038;">
+                <tr>
+                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; width: 140px; border-bottom: 1px solid #2e3038;">Client Name</td>
+                  <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;"><strong>${escapeHtml(name)}</strong></td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Email Address</td>
+                  <td style="padding: 12px 16px; border-bottom: 1px solid #2e3038;"><a href="mailto:${escapeHtml(email)}" style="color: #93c5fd; text-decoration: none;">${escapeHtml(email)}</a></td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Phone Number</td>
+                  <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">${phone ? `<a href="tel:${escapeHtml(phone)}" style="color: #93c5fd; text-decoration: none;">${escapeHtml(phone)}</a>` : 'Not provided'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Service Interested</td>
+                  <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">${escapeHtml(service)}</td>
+                </tr>
+                ${
+                  product_title
+                    ? `
+                <tr>
+                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Design Reference</td>
+                  <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">
+                    <span style="background: rgba(201, 169, 110, 0.2); color: #c9a86a; padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 13px;">${escapeHtml(product_title)}</span>
+                  </td>
+                </tr>
+                `
+                    : ''
+                }
+                <tr>
+                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a;">Received Date</td>
+                  <td style="padding: 12px 16px; color: #9ca3af;">${formattedDate}</td>
+                </tr>
+              </table>
 
-        if (transporter) {
-          const subjectTag = product_title ? ` [${product_title}]` : ''
-          const ownerMailOptions = {
-            from: `"Reyansh Studio Website" <${process.env.EMAIL_USER || 'reyaneshstudio@gmail.com'}>`,
-            to: recipient,
-            replyTo: email,
-            subject: `🌟 New Furniture Enquiry: ${name}${subjectTag} (${service})`,
-            attachments,
-            html: `
-              <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background-color: #121316; color: #f3f4f6; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a2e;">
-                <div style="background: linear-gradient(135deg, #1f1b13 0%, #2a2215 100%); padding: 32px 24px; text-align: center; border-bottom: 2px solid #c9a86a;">
-                  <h1 style="color: #c9a86a; margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase;">REYANSH STUDIO</h1>
-                  <p style="color: #d1d5db; margin: 8px 0 0; font-size: 14px;">Let Your Dream Come Alive &bull; Design &bull; Create &bull; Inspire</p>
-                </div>
-                
-                <div style="padding: 28px 24px;">
-                  <p style="font-size: 15px; line-height: 1.6; margin-top: 0; color: #e5e7eb;">
-                    A customer has submitted a furniture enquiry through your website:
-                  </p>
+              ${photoSectionHtml}
 
-                  <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #1a1b20; border-radius: 8px; overflow: hidden; border: 1px solid #2e3038;">
-                    <tr>
-                      <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; width: 140px; border-bottom: 1px solid #2e3038;">Client Name</td>
-                      <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;"><strong>${escapeHtml(name)}</strong></td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Email Address</td>
-                      <td style="padding: 12px 16px; border-bottom: 1px solid #2e3038;"><a href="mailto:${escapeHtml(email)}" style="color: #93c5fd; text-decoration: none;">${escapeHtml(email)}</a></td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Phone Number</td>
-                      <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">${phone ? `<a href="tel:${escapeHtml(phone)}" style="color: #93c5fd; text-decoration: none;">${escapeHtml(phone)}</a>` : 'Not provided'}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Service Interested</td>
-                      <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">${escapeHtml(service)}</td>
-                    </tr>
-                    ${
-                      product_title
-                        ? `
-                    <tr>
-                      <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Design Reference</td>
-                      <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">
-                        <span style="background: rgba(201, 169, 110, 0.2); color: #c9a86a; padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 13px;">${escapeHtml(product_title)}</span>
-                      </td>
-                    </tr>
-                    `
-                        : ''
-                    }
-                    <tr>
-                      <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a;">Received Date</td>
-                      <td style="padding: 12px 16px; color: #9ca3af;">${formattedDate}</td>
-                    </tr>
-                  </table>
-
-                  ${photoSectionHtml}
-
-                  <div style="background-color: #1a1b20; padding: 18px; border-radius: 8px; border-left: 4px solid #c9a86a; margin-bottom: 24px;">
-                    <h4 style="margin: 0 0 10px; color: #c9a86a; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Customer's Message</h4>
-                    <p style="margin: 0; line-height: 1.6; white-space: pre-wrap; color: #e5e7eb;">${escapeHtml(message)}</p>
-                  </div>
-
-                  <div style="text-align: center; margin-top: 26px;">
-                    <a href="mailto:${escapeHtml(email)}?subject=Regarding%20your%20furniture%20enquiry%20with%20Reyansh%20Studio" style="background-color: #c9a86a; color: #111; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px; display: inline-block;">Reply to ${escapeHtml(name)}</a>
-                  </div>
-                </div>
-
-                <div style="background-color: #0b0c0e; padding: 14px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #222;">
-                  Reyansh Studio Notification Engine &bull; <a href="https://reyanshstudio.com" style="color: #c9a86a; text-decoration: none;">reyanshstudio.com</a>
-                </div>
+              <div style="background-color: #1a1b20; padding: 18px; border-radius: 8px; border-left: 4px solid #c9a86a; margin-bottom: 24px;">
+                <h4 style="margin: 0 0 10px; color: #c9a86a; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Customer's Message</h4>
+                <p style="margin: 0; line-height: 1.6; white-space: pre-wrap; color: #e5e7eb;">${escapeHtml(message)}</p>
               </div>
-            `,
-          }
 
-          const info = await transporter.sendMail(ownerMailOptions)
-          emailStatus.sent = true
+              <div style="text-align: center; margin-top: 26px;">
+                <a href="mailto:${escapeHtml(email)}?subject=Regarding%20your%20furniture%20enquiry%20with%20Reyansh%20Studio" style="background-color: #c9a86a; color: #111; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px; display: inline-block;">Reply to ${escapeHtml(name)}</a>
+              </div>
+            </div>
 
-          const testUrl = nodemailer.getTestMessageUrl(info)
-          if (testUrl) {
-            emailStatus.note = testUrl
-            console.log('📬 [Test Mode] Preview enquiry email here:', testUrl)
-          }
-
-          newLead.emailSent = true
-          const updatedList = getConsultations()
-          const idx = updatedList.findIndex(c => c.id === newLead.id)
-          if (idx !== -1) {
-            updatedList[idx].emailSent = true
-            saveConsultations(updatedList)
-          }
-        }
-      } catch (mailErr) {
-        console.warn('⚠️  Email delivery skipped or failed (lead is safely saved to storage):', mailErr.message)
+            <div style="background-color: #0b0c0e; padding: 14px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #222;">
+              Reyansh Studio Notification Engine &bull; <a href="https://reyanshstudio.com" style="color: #c9a86a; text-decoration: none;">reyanshstudio.com</a>
+            </div>
+          </div>
+        `,
       }
 
+      // 4. Dispatch Email with fast timeout - NEVER wait indefinitely
+      const emailResult = await dispatchEnquiryEmail(ownerMailOptions)
+
+      if (emailResult.sent) {
+        newLead.emailSent = true
+        const updatedList = getConsultations()
+        const idx = updatedList.findIndex(c => c.id === newLead.id)
+        if (idx !== -1) {
+          updatedList[idx].emailSent = true
+          saveConsultations(updatedList)
+        }
+      } else {
+        newLead.emailSent = false
+        newLead.emailNote = emailResult.error || 'Email delayed or skipped'
+        const updatedList = getConsultations()
+        const idx = updatedList.findIndex(c => c.id === newLead.id)
+        if (idx !== -1) {
+          updatedList[idx].emailSent = false
+          updatedList[idx].emailNote = newLead.emailNote
+          saveConsultations(updatedList)
+        }
+      }
+
+      // 5. Always return a timely, valid JSON response with HTTP 200
       return res.status(200).json({
         success: true,
-        message: 'Enquiry received successfully! Our team will contact you shortly.',
+        saved: true,
+        message: emailResult.sent
+          ? 'Enquiry received successfully! Our team will contact you shortly.'
+          : 'Thank you! Your enquiry has been received and safely saved in our studio database. Our team will contact you shortly.',
         id: newLead.id,
         lead: newLead,
+        emailSent: Boolean(emailResult.sent),
         has_photo: Boolean(req.file || photo_data || photo_filename),
-        previewUrl: emailStatus.note || undefined,
+        notice: emailResult.sent
+          ? undefined
+          : 'Email notification to studio is delayed, but your enquiry is safely logged in our database.',
       })
     } catch (error) {
       console.error('Error handling enquiry:', error)

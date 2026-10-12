@@ -27,6 +27,7 @@ export default function ContactForm() {
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [emailNotice, setEmailNotice] = useState('')
   const [submittedName, setSubmittedName] = useState('')
   const [serverOnline, setServerOnline] = useState(null)
 
@@ -68,9 +69,10 @@ export default function ContactForm() {
 
     setLoading(true)
     setErrorMessage('')
+    setEmailNotice('')
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    const timeoutId = setTimeout(() => controller.abort(), 20000)
 
     try {
       const payload = {
@@ -92,17 +94,25 @@ export default function ContactForm() {
       clearTimeout(timeoutId)
       const data = await response.json().catch(() => null)
 
-      if (!response.ok || !data || !data.success) {
+      if (data && (data.success || data.saved)) {
+        setSubmittedName(form.name)
+        setSent(true)
+        if (data.emailSent === false) {
+          setEmailNotice(
+            data.notice ||
+              'Your consultation request has been safely saved in our studio database! Email notification may be slightly delayed, but our team can view your enquiry directly in our admin portal.'
+          )
+        } else {
+          setEmailNotice('')
+        }
+        setForm({ name: '', email: '', phone: '', service: '', message: '' })
+        setAttachedPhoto(null)
+      } else {
         const errorText = (data && data.message)
           ? data.message
           : `Server returned error (${response.status}). Please try again or reach us directly on WhatsApp.`
         throw new Error(errorText)
       }
-
-      setSubmittedName(form.name)
-      setSent(true)
-      setForm({ name: '', email: '', phone: '', service: '', message: '' })
-      setAttachedPhoto(null)
     } catch (err) {
       clearTimeout(timeoutId)
       console.error('Submission failed:', err)
@@ -121,6 +131,7 @@ export default function ContactForm() {
   const resetForm = () => {
     setSent(false)
     setErrorMessage('')
+    setEmailNotice('')
   }
 
   return (
@@ -146,9 +157,29 @@ export default function ContactForm() {
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', color: '#fff', marginBottom: 12 }}>
             Thank You{submittedName ? `, ${submittedName}` : ''}!
           </h3>
-          <p style={{ color: 'var(--text-muted-light)', fontSize: '1rem', lineHeight: 1.6, maxWidth: 460, margin: '0 auto 24px' }}>
-            Your consultation request has been sent successfully to <strong>Reyansh Studio</strong>. Our lead designer will review your details and reach out to you shortly.
+          <p style={{ color: 'var(--text-muted-light)', fontSize: '1rem', lineHeight: 1.6, maxWidth: 460, margin: '0 auto 20px' }}>
+            Your consultation request has been received by <strong>Reyansh Studio</strong>. Our lead designer will review your details and reach out to you shortly.
           </p>
+
+          {emailNotice && (
+            <div
+              style={{
+                background: 'rgba(201, 169, 110, 0.12)',
+                border: '1px solid rgba(201, 169, 110, 0.35)',
+                borderRadius: 8,
+                padding: '12px 16px',
+                maxWidth: 460,
+                margin: '0 auto 24px',
+                fontSize: '0.85rem',
+                color: '#e5e7eb',
+                lineHeight: 1.5,
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ color: 'var(--gold)', fontWeight: 600 }}>Note: </span>
+              {emailNotice}
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyContent: 'center' }}>
             <a
