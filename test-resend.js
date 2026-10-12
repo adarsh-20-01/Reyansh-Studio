@@ -7,9 +7,9 @@ console.log('\n========================================================')
 console.log('🔍 Testing Resend HTTPS Configuration for Reyansh Studio')
 console.log('========================================================')
 
-const apiKey = (process.env.RESEND_API_KEY || '').trim()
-const receiver = (process.env.RECEIVER_EMAIL || 'reyaneshstudio@gmail.com').trim()
-const sender = (process.env.VERIFIED_SENDER_EMAIL || 'onboarding@resend.dev').trim()
+const apiKey = (process.env.RESEND_API_KEY || '').trim().replace(/^["']|["']$/g, '')
+const receiver = (process.env.RECEIVER_EMAIL || 'reyaneshstudio@gmail.com').trim().replace(/^["']|["']$/g, '')
+const sender = (process.env.VERIFIED_SENDER_EMAIL || 'onboarding@resend.dev').trim().replace(/^["']|["']$/g, '')
 
 console.log(`• Destination (RECEIVER_EMAIL) : ${receiver}`)
 console.log(`• Sender (VERIFIED_SENDER_EMAIL) : ${sender}`)

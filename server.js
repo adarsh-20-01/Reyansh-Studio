@@ -303,9 +303,9 @@ const dispatchEnquiryEmail = async ({
   attachments = [],
   photo_url = '',
 }) => {
-  const apiKey = (process.env.RESEND_API_KEY || '').trim()
-  const receiver = (process.env.RECEIVER_EMAIL || process.env.BUSINESS_EMAIL || 'reyaneshstudio@gmail.com').trim()
-  const rawSender = (process.env.VERIFIED_SENDER_EMAIL || process.env.SENDER_EMAIL || 'onboarding@resend.dev').trim()
+  const apiKey = (process.env.RESEND_API_KEY || '').trim().replace(/^["']|["']$/g, '')
+  const receiver = (process.env.RECEIVER_EMAIL || process.env.BUSINESS_EMAIL || 'reyaneshstudio@gmail.com').trim().replace(/^["']|["']$/g, '')
+  const rawSender = (process.env.VERIFIED_SENDER_EMAIL || process.env.SENDER_EMAIL || 'onboarding@resend.dev').trim().replace(/^["']|["']$/g, '')
 
   if (!apiKey) {
     console.warn('⚠️ [Resend Diagnostic] RESEND_API_KEY is not configured in environment. Lead has been saved safely to database, but HTTPS email dispatch is skipped.')
