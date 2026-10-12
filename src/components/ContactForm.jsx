@@ -402,7 +402,7 @@ export default function ContactForm() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
             <button
               type="submit"
-              className="btn-gold"
+              className="btn-gold contact-submit-btn"
               disabled={loading}
               style={{
                 alignSelf: 'flex-start',

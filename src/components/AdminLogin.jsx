@@ -50,6 +50,7 @@ export default function AdminLogin({ onLoginSuccess }) {
       }}
     >
       <motion.div
+        className="admin-login-card"
         initial={{ opacity: 0, y: 25, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
@@ -60,7 +61,7 @@ export default function AdminLogin({ onLoginSuccess }) {
           backdropFilter: 'blur(20px)',
           border: '1px solid rgba(212, 175, 55, 0.35)',
           borderRadius: '20px',
-          padding: '42px 36px',
+          padding: '32px 24px',
           boxShadow: '0 25px 60px rgba(0, 0, 0, 0.65), 0 0 40px rgba(212, 175, 55, 0.1)',
           position: 'relative',
         }}
@@ -205,7 +206,7 @@ export default function AdminLogin({ onLoginSuccess }) {
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                   borderRadius: 10,
                   color: '#fff',
-                  fontSize: '0.92rem',
+                  fontSize: '16px',
                   outline: 'none',
                   transition: 'all 0.25s ease',
                 }}
@@ -267,7 +268,7 @@ export default function AdminLogin({ onLoginSuccess }) {
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                   borderRadius: 10,
                   color: '#fff',
-                  fontSize: '0.92rem',
+                  fontSize: '16px',
                   outline: 'none',
                   transition: 'all 0.25s ease',
                 }}

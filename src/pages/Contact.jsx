@@ -166,7 +166,7 @@ export default function Contact() {
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 16 }}>
                   Scan the WhatsApp QR code with your phone camera or click the card to start an instant conversation:
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 16 }}>
                   <div
                     style={{
                       borderRadius: 10,

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X,
@@ -43,7 +43,18 @@ export default function AddPhotoModal({ isOpen, onClose, onPhotoAdded }) {
 
   const fileInputRef = useRef(null)
 
-  if (!isOpen || !isAdmin) return null
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+    }
+  }, [isOpen])
 
   const handleFileChange = file => {
     if (!file) return
@@ -236,10 +247,13 @@ export default function AddPhotoModal({ isOpen, onClose, onPhotoAdded }) {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 10000,
-          padding: 16,
+          padding: 12,
         }}
       >
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-photo-modal-title"
           initial={{ opacity: 0, scale: 0.94, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, y: 15 }}
@@ -251,10 +265,10 @@ export default function AddPhotoModal({ isOpen, onClose, onPhotoAdded }) {
             borderRadius: 16,
             width: '100%',
             maxWidth: 620,
-            maxHeight: '92vh',
+            maxHeight: '94vh',
             overflowY: 'auto',
             boxShadow: '0 25px 60px rgba(0,0,0,0.7), 0 0 40px rgba(212,175,55,0.1)',
-            padding: '28px 26px',
+            padding: '24px 20px',
             color: '#fff',
             position: 'relative',
           }}
@@ -263,15 +277,18 @@ export default function AddPhotoModal({ isOpen, onClose, onPhotoAdded }) {
           <button
             type="button"
             onClick={handleClose}
+            aria-label="Close"
             style={{
               position: 'absolute',
-              top: 18,
-              right: 18,
+              top: 14,
+              right: 14,
               background: 'rgba(255,255,255,0.06)',
               border: '1px solid rgba(255,255,255,0.15)',
               borderRadius: '50%',
-              width: 36,
-              height: 36,
+              width: 44,
+              height: 44,
+              minWidth: 44,
+              minHeight: 44,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -288,7 +305,7 @@ export default function AddPhotoModal({ isOpen, onClose, onPhotoAdded }) {
               e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
             }}
           >
-            <X size={18} />
+            <X size={20} />
           </button>
 
           {/* Modal Header */}
@@ -643,7 +660,7 @@ export default function AddPhotoModal({ isOpen, onClose, onPhotoAdded }) {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: category === '__custom__' ? '1fr 1fr' : '1fr',
+                gridTemplateColumns: category === '__custom__' ? 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))' : '1fr',
                 gap: 12,
                 marginBottom: 16,
               }}

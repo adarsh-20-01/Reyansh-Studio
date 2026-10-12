@@ -314,7 +314,7 @@ export default function Admin() {
                   {backendHealth ? 'Backend Server Online (Express)' : 'Backend Server Offline'}
                 </strong>
               </div>
-              <p style={{ margin: '4px 0 0', color: 'var(--text-muted-light)', fontSize: '0.85rem' }}>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-muted-light)', fontSize: '0.85rem', wordBreak: 'break-word' }}>
                 {backendHealth
                   ? `Active on http://localhost:5000 • Leads stored in data/consultations.json • Email: ${backendHealth.receiver}`
                   : 'Cannot reach backend at /api. Make sure "npm run dev" or "node server.js" is active.'}
@@ -576,7 +576,7 @@ export default function Admin() {
                   </div>
 
                   {/* Quick Action buttons */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                     {lead.phone && (
                       <a
                         href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
@@ -590,10 +590,12 @@ export default function Admin() {
                           alignItems: 'center',
                           gap: 6,
                           fontSize: '0.8rem',
-                          padding: '7px 12px',
+                          padding: '8px 14px',
                           color: '#25D366',
                           borderColor: '#25D366',
                           textDecoration: 'none',
+                          minHeight: 38,
+                          borderRadius: 6,
                         }}
                       >
                         <MessageSquare size={14} /> WhatsApp
@@ -604,13 +606,14 @@ export default function Admin() {
                       value={lead.status}
                       onChange={e => updateStatus(lead.id, e.target.value)}
                       style={{
-                        padding: '6px 10px',
+                        padding: '8px 12px',
                         background: '#1c1c1f',
                         border: '1px solid #444',
                         borderRadius: 6,
                         color: 'var(--text-light)',
-                        fontSize: '0.8rem',
+                        fontSize: '0.82rem',
                         cursor: 'pointer',
+                        minHeight: 38,
                       }}
                     >
                       <option value="new">Mark New</option>
@@ -621,13 +624,19 @@ export default function Admin() {
                     <button
                       onClick={() => deleteLead(lead.id, lead.name)}
                       aria-label="Delete Lead"
+                      type="button"
                       style={{
                         background: 'transparent',
                         border: 'none',
                         color: '#ef4444',
                         cursor: 'pointer',
-                        padding: 6,
+                        padding: 8,
                         borderRadius: 4,
+                        minWidth: 38,
+                        minHeight: 38,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
                       <Trash2 size={16} />

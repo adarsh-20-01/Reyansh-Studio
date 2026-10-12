@@ -33,6 +33,22 @@ export default function Navbar() {
     localStorage.setItem('theme', theme)
   }, [theme])
 
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && open) setOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = ''
+    }
+  }, [open])
+
   const handleSelectTheme = (newTheme) => {
     setTheme(newTheme)
   }
@@ -60,7 +76,13 @@ export default function Navbar() {
           <Link to="/contact" className="nav-cta">Get a Quote</Link>
         </div>
         <div className="nav-mobile-actions">
-          <button className={`hamburger ${open ? 'open' : ''}`} onClick={() => setOpen(!open)} aria-label="Menu">
+          <button
+            className={`hamburger ${open ? 'open' : ''}`}
+            onClick={() => setOpen(!open)}
+            aria-label="Toggle navigation menu"
+            aria-expanded={open}
+            type="button"
+          >
             <span /><span /><span />
           </button>
         </div>
@@ -79,6 +101,14 @@ export default function Navbar() {
           }}
           variant="inline"
         />
+        <Link
+          to="/contact"
+          className="nav-cta"
+          onClick={() => setOpen(false)}
+          style={{ textAlign: 'center', marginTop: 8 }}
+        >
+          Get a Quote
+        </Link>
       </div>
     </>
   )

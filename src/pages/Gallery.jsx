@@ -269,10 +269,10 @@ export default function Gallery() {
     setTimeout(() => setToastMessage(''), 3500)
   }
 
-  // Keyboard navigation for lightbox
+  // Keyboard navigation and body scroll lock for lightbox
   useEffect(() => {
+    if (lightbox === null) return
     const handleKeyDown = e => {
-      if (lightbox === null) return
       if (e.key === 'Escape') setLightbox(null)
       if (e.key === 'ArrowLeft') {
         setLightbox(curr => (curr - 1 + filteredImages.length) % filteredImages.length)
@@ -282,7 +282,11 @@ export default function Gallery() {
       }
     }
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+    }
   }, [lightbox, filteredImages.length])
 
   const currentItem = lightbox !== null ? filteredImages[lightbox] : null
@@ -508,14 +512,14 @@ export default function Gallery() {
                   </div>
                 )}
 
-                {/* Always visible bottom badge */}
+                {/* Always visible bottom badge with touch-friendly action cue */}
                 <div
                   style={{
                     position: 'absolute',
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+                    background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.5) 70%, transparent 100%)',
                     padding: '24px 16px 12px',
                     pointerEvents: 'none',
                     display: 'flex',
@@ -523,9 +527,14 @@ export default function Gallery() {
                     gap: 3,
                   }}
                 >
-                  <span style={{ fontSize: '0.7rem', color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 600 }}>
-                    {item.tag}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 600 }}>
+                      {item.tag}
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--gold)', fontWeight: 600 }}>
+                      Enquire &rarr;
+                    </span>
+                  </div>
                   <h4 style={{ fontSize: '0.95rem', color: '#fff', margin: 0, fontWeight: 500, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
                     {item.title}
                   </h4>
@@ -618,13 +627,15 @@ export default function Gallery() {
               position: 'fixed',
               inset: 0,
               zIndex: 3000,
-              background: 'rgba(5, 5, 5, 0.94)',
+              background: 'rgba(5, 5, 5, 0.95)',
               backdropFilter: 'blur(8px)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '20px',
+              padding: '16px',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
             }}
           >
             {/* Top Bar with Counter and Close Button */}

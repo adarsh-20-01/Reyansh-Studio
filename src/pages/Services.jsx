@@ -106,24 +106,9 @@ export default function Services() {
           </div>
 
           {/* Two-Column Interactive Portal Grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-              gap: 32,
-              alignItems: 'start',
-            }}
-          >
+          <div className="service-portal-grid">
             {/* Left: Active Service Overview & Real Photos */}
-            <div
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-gold)',
-                borderRadius: '16px',
-                padding: '28px',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
-              }}
-            >
+            <div className="service-portal-card">
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <div
                   style={{

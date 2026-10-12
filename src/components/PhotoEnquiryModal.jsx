@@ -29,6 +29,19 @@ export default function PhotoEnquiryModal({ item, isOpen, onClose }) {
     }
   }, [item])
 
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+    }
+  }, [isOpen, onClose])
+
   if (!isOpen || !item) return null
 
   const photoUrl = typeof window !== 'undefined' && item.filename 
@@ -127,11 +140,14 @@ Please let me know pricing, dimensions, and fabric options.`
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '16px',
+          padding: '12px',
         }}
       >
         <motion.div
           className="photo-enquiry-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="photo-enquiry-title"
           initial={{ scale: 0.92, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.92, opacity: 0, y: 20 }}
@@ -145,7 +161,7 @@ Please let me know pricing, dimensions, and fabric options.`
             borderRadius: '16px',
             overflow: 'hidden',
             boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85)',
-            maxHeight: '92vh',
+            maxHeight: '94vh',
             display: 'flex',
             flexDirection: 'column',
           }}
@@ -153,7 +169,7 @@ Please let me know pricing, dimensions, and fabric options.`
           {/* Header */}
           <div
             style={{
-              padding: '18px 22px',
+              padding: '16px 20px',
               borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
               display: 'flex',
               alignItems: 'center',
@@ -164,8 +180,8 @@ Please let me know pricing, dimensions, and fabric options.`
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: 38,
+                  height: 38,
                   borderRadius: '50%',
                   background: 'rgba(201, 169, 110, 0.2)',
                   border: '1px solid var(--gold, #c9a96e)',
@@ -173,12 +189,13 @@ Please let me know pricing, dimensions, and fabric options.`
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: 'var(--gold, #c9a96e)',
+                  flexShrink: 0,
                 }}
               >
                 <Mail size={18} />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff', fontFamily: 'var(--font-heading)' }}>
+                <h3 id="photo-enquiry-title" style={{ margin: 0, fontSize: '1.1rem', color: '#fff', fontFamily: 'var(--font-heading)' }}>
                   Enquire About This Design
                 </h3>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #9ca3af)' }}>
@@ -190,12 +207,15 @@ Please let me know pricing, dimensions, and fabric options.`
             <button
               onClick={onClose}
               aria-label="Close"
+              type="button"
               style={{
                 background: 'rgba(255, 255, 255, 0.08)',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
                 borderRadius: '50%',
-                width: 32,
-                height: 32,
+                width: 44,
+                height: 44,
+                minWidth: 44,
+                minHeight: 44,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -204,7 +224,7 @@ Please let me know pricing, dimensions, and fabric options.`
                 transition: 'background 0.2s',
               }}
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
 
@@ -375,7 +395,7 @@ Please let me know pricing, dimensions, and fabric options.`
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-light, #f3f4f6)', marginBottom: 5, fontWeight: 500 }}>
                       Your Full Name *
@@ -389,12 +409,12 @@ Please let me know pricing, dimensions, and fabric options.`
                       disabled={loading}
                       style={{
                         width: '100%',
-                        padding: '10px 12px',
+                        padding: '11px 13px',
                         background: '#191a20',
                         border: '1px solid rgba(255, 255, 255, 0.15)',
                         borderRadius: 8,
                         color: '#fff',
-                        fontSize: '0.88rem',
+                        fontSize: '16px',
                         outline: 'none',
                       }}
                     />
@@ -413,12 +433,12 @@ Please let me know pricing, dimensions, and fabric options.`
                       disabled={loading}
                       style={{
                         width: '100%',
-                        padding: '10px 12px',
+                        padding: '11px 13px',
                         background: '#191a20',
                         border: '1px solid rgba(255, 255, 255, 0.15)',
                         borderRadius: 8,
                         color: '#fff',
-                        fontSize: '0.88rem',
+                        fontSize: '16px',
                         outline: 'none',
                       }}
                     />
@@ -438,12 +458,12 @@ Please let me know pricing, dimensions, and fabric options.`
                     disabled={loading}
                     style={{
                       width: '100%',
-                      padding: '10px 12px',
+                      padding: '11px 13px',
                       background: '#191a20',
                       border: '1px solid rgba(255, 255, 255, 0.15)',
                       borderRadius: 8,
                       color: '#fff',
-                      fontSize: '0.88rem',
+                      fontSize: '16px',
                       outline: 'none',
                     }}
                   />

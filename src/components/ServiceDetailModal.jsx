@@ -45,6 +45,19 @@ export default function ServiceDetailModal({ service, isOpen, onClose }) {
     }
   }, [service])
 
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+    }
+  }, [isOpen, onClose])
+
   if (!isOpen || !service) return null
 
   const photoUrl = typeof window !== 'undefined' && selectedPhoto?.filename
@@ -143,11 +156,14 @@ Please let me know pricing, custom options, and how we can get started.`
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '16px',
+          padding: '12px',
         }}
       >
         <motion.div
           className="service-modal-container"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="service-modal-title"
           initial={{ scale: 0.94, opacity: 0, y: 25 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.94, opacity: 0, y: 25 }}
@@ -161,15 +177,16 @@ Please let me know pricing, custom options, and how we can get started.`
             borderRadius: '16px',
             overflow: 'hidden',
             boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85)',
-            maxHeight: '92vh',
+            maxHeight: '94vh',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
           {/* Modal Top Header */}
           <div
+            className="service-modal-header"
             style={{
-              padding: '20px 28px',
+              padding: '18px 24px',
               borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
               display: 'flex',
               alignItems: 'center',
@@ -196,7 +213,7 @@ Please let me know pricing, custom options, and how we can get started.`
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#fff', fontFamily: 'var(--font-heading)' }}>
+                  <h2 id="service-modal-title" style={{ margin: 0, fontSize: '1.4rem', color: '#fff', fontFamily: 'var(--font-heading)' }}>
                     {service.title}
                   </h2>
                   <span
@@ -227,8 +244,10 @@ Please let me know pricing, custom options, and how we can get started.`
                 background: 'rgba(255, 255, 255, 0.08)',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
                 borderRadius: '50%',
-                width: 36,
-                height: 36,
+                width: 44,
+                height: 44,
+                minWidth: 44,
+                minHeight: 44,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -237,20 +256,12 @@ Please let me know pricing, custom options, and how we can get started.`
                 transition: 'background 0.2s',
               }}
             >
-              <X size={18} />
+              <X size={20} />
             </button>
           </div>
 
           {/* Modal Scrollable Body */}
-          <div
-            style={{
-              padding: '24px 28px',
-              overflowY: 'auto',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-              gap: 28,
-            }}
-          >
+          <div className="service-modal-body">
             {/* Left Column: Description, Highlights, Specs, and Real Photos */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
               {/* Detailed Description */}
@@ -430,19 +441,7 @@ Please let me know pricing, custom options, and how we can get started.`
             </div>
 
             {/* Right Column: Integrated Service Enquiry Portal */}
-            <div
-              style={{
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid var(--border-gold, rgba(201, 169, 110, 0.35))',
-                borderRadius: '14px',
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                height: 'fit-content',
-                position: 'sticky',
-                top: 0,
-              }}
-            >
+            <div className="service-modal-form-col">
               <div style={{ marginBottom: 16 }}>
                 <span
                   style={{
