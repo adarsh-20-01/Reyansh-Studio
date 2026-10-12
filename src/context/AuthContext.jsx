@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { apiUrl } from '../config/api'
 
 const AuthContext = createContext(null)
 
@@ -43,7 +44,7 @@ export function AuthProvider({ children }) {
 
     try {
       // 1. Attempt server verification
-      const res = await fetch('/api/admin/login', {
+      const res = await fetch(apiUrl('/api/admin/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),

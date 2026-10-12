@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import PhotoEnquiryModal from '../components/PhotoEnquiryModal'
 import AddPhotoModal from '../components/AddPhotoModal'
 import { useAuth } from '../context/AuthContext'
+import { apiUrl } from '../config/api'
 
 // Core assets
 import imgLiving from '../assets/project-living.png'
@@ -207,7 +208,7 @@ export default function Gallery() {
       console.warn('Error reading custom gallery from localStorage:', e)
     }
 
-    fetch('/api/gallery')
+    fetch(apiUrl('/api/gallery'))
       .then(res => res.json())
       .then(data => {
         if (data && data.success && Array.isArray(data.items)) {
@@ -259,7 +260,7 @@ export default function Gallery() {
     setLightbox(null)
 
     try {
-      await fetch(`/api/gallery/${item.id}`, { method: 'DELETE' })
+      await fetch(apiUrl(`/api/gallery/${item.id}`), { method: 'DELETE' })
     } catch (err) {
       console.warn('Backend delete request failed:', err)
     }

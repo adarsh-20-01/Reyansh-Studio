@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ArrowRight,
 } from 'lucide-react'
+import { apiUrl } from '../config/api'
 
 export default function ServiceDetailModal({ service, isOpen, onClose }) {
   const [selectedPhoto, setSelectedPhoto] = useState(null)
@@ -62,6 +63,9 @@ Please let me know pricing, custom options, and how we can get started.`
     setLoading(true)
     setError('')
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+
     try {
       const payload = {
         name: form.name.trim(),
@@ -74,28 +78,36 @@ Please let me know pricing, custom options, and how we can get started.`
         photo_url: photoUrl,
       }
 
-      const res = await fetch('/api/contact', {
+      const endpoint = apiUrl('/api/contact')
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       })
 
+      clearTimeout(timeoutId)
       const data = await res.json().catch(() => null)
 
       if (!res.ok || !data || !data.success) {
         throw new Error(
           (data && data.message) ||
-            `Failed to send enquiry (${res.status}). Please check network or connect via WhatsApp.`
+            `Failed to send enquiry (${res.status}). Server might be starting up, please try again or connect via WhatsApp.`
         )
       }
 
       setSent(true)
     } catch (err) {
+      clearTimeout(timeoutId)
       console.error('Service enquiry failed:', err)
-      setError(err.message || 'Unable to deliver enquiry. Please try WhatsApp.')
+      if (err.name === 'AbortError') {
+        setError('Server request timed out. Please try once more or connect via WhatsApp.')
+      } else {
+        setError(err.message || 'Unable to deliver enquiry. Please try WhatsApp.')
+      }
     } finally {
       setLoading(false)
     }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Send, CheckCircle, AlertCircle, Loader2, MessageSquare, Mail, Camera } from 'lucide-react'
+import { apiUrl } from '../config/api'
 
 export default function PhotoEnquiryModal({ item, isOpen, onClose }) {
   const [form, setForm] = useState({
@@ -48,6 +49,9 @@ Please let me know pricing, dimensions, and fabric options.`
     setLoading(true)
     setError('')
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+
     try {
       const payload = {
         name: form.name.trim(),
@@ -60,28 +64,36 @@ Please let me know pricing, dimensions, and fabric options.`
         photo_url: photoUrl,
       }
 
-      const res = await fetch('/api/contact', {
+      const endpoint = apiUrl('/api/contact')
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       })
 
+      clearTimeout(timeoutId)
       const data = await res.json().catch(() => null)
 
       if (!res.ok || !data || !data.success) {
         throw new Error(
           (data && data.message) ||
-            `Failed to send enquiry (${res.status}). Please try again or reach us directly on WhatsApp.`
+            `Failed to send enquiry (${res.status}). Server might be starting up, please try again or connect directly via WhatsApp.`
         )
       }
 
       setSent(true)
     } catch (err) {
+      clearTimeout(timeoutId)
       console.error('Enquiry failed:', err)
-      setError(err.message || 'Unable to deliver enquiry. Please check your network or try WhatsApp.')
+      if (err.name === 'AbortError') {
+        setError('Server request timed out. If the server was sleeping, please try once more or reach us on WhatsApp.')
+      } else {
+        setError(err.message || 'Unable to deliver enquiry. Please check your network or try WhatsApp.')
+      }
     } finally {
       setLoading(false)
     }

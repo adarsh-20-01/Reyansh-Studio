@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { apiUrl } from '../config/api'
 import { useAuth } from '../context/AuthContext'
 import AdminLogin from '../components/AdminLogin'
 
@@ -36,7 +37,7 @@ export default function Admin() {
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch('/api/health')
+      const res = await fetch(apiUrl('/api/health'))
       if (res.ok) {
         const data = await res.json()
         setBackendHealth(data)
@@ -52,7 +53,7 @@ export default function Admin() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/consultations')
+      const res = await fetch(apiUrl('/api/consultations'))
       if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to load leads`)
       const data = await res.json()
       setLeads(data.consultations || [])
@@ -72,7 +73,7 @@ export default function Admin() {
 
   const updateStatus = async (id, newStatus) => {
     try {
-      const res = await fetch(`/api/consultations/${id}`, {
+      const res = await fetch(apiUrl(`/api/consultations/${id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -89,7 +90,7 @@ export default function Admin() {
   const deleteLead = async (id, name) => {
     if (!window.confirm(`Delete consultation inquiry from ${name}?`)) return
     try {
-      const res = await fetch(`/api/consultations/${id}`, {
+      const res = await fetch(apiUrl(`/api/consultations/${id}`), {
         method: 'DELETE',
       })
       if (res.ok) {
@@ -108,7 +109,7 @@ export default function Admin() {
     const randomService = testServices[Math.floor(Math.random() * testServices.length)]
 
     try {
-      const res = await fetch('/api/consultation', {
+      const res = await fetch(apiUrl('/api/consultation'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

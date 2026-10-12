@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, CheckCircle, AlertCircle, Loader2, MessageSquare, Check, Server, Camera, X } from 'lucide-react'
+import { apiUrl } from '../config/api'
 
 const SERVICES = [
   'Home Interior',
@@ -29,13 +30,8 @@ export default function ContactForm() {
   const [submittedName, setSubmittedName] = useState('')
   const [serverOnline, setServerOnline] = useState(null)
 
-  const API_BASE_URL = (
-    import.meta.env.VITE_API_BASE_URL ||
-    "https://reyansh-studio.onrender.com"
-  ).replace(/\/+$/, "");
-
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/health`)
+    fetch(apiUrl('/api/health'))
       .then((response) => {
         if (!response.ok) throw new Error("Backend unavailable");
         return response.json();
@@ -73,6 +69,9 @@ export default function ContactForm() {
     setLoading(true)
     setErrorMessage('')
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+
     try {
       const payload = {
         ...form,
@@ -80,15 +79,17 @@ export default function ContactForm() {
         photo_filename: attachedPhoto?.name || '',
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/contact`, {
+      const response = await fetch(apiUrl('/api/contact'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       })
 
+      clearTimeout(timeoutId)
       const data = await response.json().catch(() => null)
 
       if (!response.ok || !data || !data.success) {
@@ -103,10 +104,15 @@ export default function ContactForm() {
       setForm({ name: '', email: '', phone: '', service: '', message: '' })
       setAttachedPhoto(null)
     } catch (err) {
+      clearTimeout(timeoutId)
       console.error('Submission failed:', err)
-      setErrorMessage(
-        err.message || 'Unable to connect to the email server. Please check your network or contact us directly on WhatsApp.'
-      )
+      if (err.name === 'AbortError') {
+        setErrorMessage('Server request timed out. Please try once more or contact us directly on WhatsApp.')
+      } else {
+        setErrorMessage(
+          err.message || 'Unable to connect to the email server. Please check your network or contact us directly on WhatsApp.'
+        )
+      }
     } finally {
       setLoading(false)
     }

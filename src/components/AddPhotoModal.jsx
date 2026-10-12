@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { apiUrl } from '../config/api'
 
 const DEFAULT_CATEGORIES = [
   'Custom Sofas',
@@ -142,7 +143,7 @@ export default function AddPhotoModal({ isOpen, onClose, onPhotoAdded }) {
           formData.append('tag', finalTag)
           formData.append('desc', finalDesc)
 
-          const res = await fetch('/api/gallery', {
+          const res = await fetch(apiUrl('/api/gallery'), {
             method: 'POST',
             body: formData,
           })
@@ -155,7 +156,7 @@ export default function AddPhotoModal({ isOpen, onClose, onPhotoAdded }) {
           }
         } else {
           // JSON with Base64 / URL
-          const res = await fetch('/api/gallery', {
+          const res = await fetch(apiUrl('/api/gallery'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
