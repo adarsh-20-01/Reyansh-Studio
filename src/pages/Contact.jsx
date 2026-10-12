@@ -13,8 +13,8 @@ const contactDetails = [
     title: 'Call Us (Mobile)',
     content: (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <a href="tel:+917887556060" style={{ color: 'var(--text-light)', textDecoration: 'none', fontWeight: 500 }}>
-          +91 78875 56060
+        <a href="tel:+919028188787" style={{ color: 'var(--text-light)', textDecoration: 'none', fontWeight: 500 }}>
+          +91 90281 88787
         </a>
         <a href="tel:+919404466587" style={{ color: 'var(--text-light)', textDecoration: 'none', fontWeight: 500 }}>
           +91 94044 66587

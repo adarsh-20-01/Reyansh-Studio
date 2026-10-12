@@ -154,7 +154,8 @@ npm run preview
 ## 📍 Studio Contact Information
 - **Studio Address**: Reyansh Studio, Tilekar Nagar, Kondhwa Budruk, Pune, Maharashtra 411048
 - **Directions**: [Open Google Maps Directions](https://www.google.com/maps/dir/18.4416735,73.8690576/REYANSH+STUDIO,+Yewalewadi,+TILAKER+NAGER,+Kondhwa+Budruk,+Pune,+Maharashtra+411048/@18.4458178,73.8651758,15z/data=!3m1!4b1!4m9!4m8!1m1!4e1!1m5!1m1!1s0x3bc2ebee32ac5f73:0x271d6320ebfc173c!2m2!1d73.8864756!2d18.4404281)
-- **Phone**: +91 78875 56060 / +91 94044 66587
+- **Phone (Calls)**: +91 90281 88787 / +91 94044 66587
+- **WhatsApp (Enquiries)**: +91 78875 56060
 - **Email**: reyaneshstudio@gmail.com
 
 ---

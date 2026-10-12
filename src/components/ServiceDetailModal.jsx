@@ -660,7 +660,7 @@ Please let me know pricing, custom options, and how we can get started.`
                         required
                         value={form.phone}
                         onChange={e => setForm({ ...form, phone: e.target.value })}
-                        placeholder="+91 78875 56060"
+                        placeholder="+91 90281 88787"
                         disabled={loading}
                         style={{
                           width: '100%',

@@ -61,7 +61,7 @@ export default function Footer() {
           <div className="footer-col">
             <h4>Contact Us</h4>
             <ul>
-              <li><a href="tel:+917887556060" className="contact-line" style={{ color: 'inherit', textDecoration: 'none' }}><Phone size={16} /> +91 78875 56060</a></li>
+              <li><a href="tel:+919028188787" className="contact-line" style={{ color: 'inherit', textDecoration: 'none' }}><Phone size={16} /> +91 90281 88787</a></li>
               <li><a href="tel:+919404466587" className="contact-line" style={{ color: 'inherit', textDecoration: 'none' }}><Phone size={16} /> +91 94044 66587</a></li>
               <li>
                 <a
