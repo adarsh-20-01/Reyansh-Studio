@@ -27,6 +27,7 @@
     "react-dom": "^19.1.0",
     "react-intersection-observer": "^10.0.3",
     "react-router-dom": "^7.15.0",
+    "resend": "^6.32.1",
     "swiper": "^12.1.4"
   },
   "devDependencies": {

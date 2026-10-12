@@ -1,19 +1,11 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import nodemailer from 'nodemailer'
 import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
-import dns from 'dns'
 import { fileURLToPath } from 'url'
-
-// Force IPv4 DNS resolution first to prevent IPv6 connection hangs in cloud/container environments (e.g. Render)
-if (dns && dns.setDefaultResultOrder) {
-  try {
-    dns.setDefaultResultOrder('ipv4first')
-  } catch (_) {}
-}
+import { Resend } from 'resend'
 
 dotenv.config()
 
@@ -251,13 +243,17 @@ app.get('/api/admin/verify', (req, res) => {
 app.get('/api/health', (req, res) => {
   const consultations = getConsultations()
   const gallery = getCustomGallery()
+  const isResendConfigured = Boolean((process.env.RESEND_API_KEY || '').trim())
+
   res.json({
     status: 'ok',
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     service: 'Reyansh Studio Backend & Enquiry Engine',
-    emailConfigured: Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS),
-    receiver: process.env.RECEIVER_EMAIL || 'reyaneshstudio@gmail.com',
+    emailEngine: 'Resend HTTPS API (Port 443)',
+    emailConfigured: isResendConfigured,
+    receiver: process.env.RECEIVER_EMAIL || process.env.BUSINESS_EMAIL || 'reyaneshstudio@gmail.com',
+    sender: process.env.VERIFIED_SENDER_EMAIL || process.env.SENDER_EMAIL || 'onboarding@resend.dev',
     totalConsultations: consultations.length,
     newLeadsCount: consultations.filter(c => c.status === 'new').length,
     customGalleryCount: gallery.length,
@@ -292,87 +288,188 @@ app.get('/api/consultations', (req, res) => {
 })
 
 /**
- * Dispatch an enquiry email with explicit timeouts and connection fallback.
- * Prevents SMTP from hanging indefinitely and returns a clean result object.
- * Does NOT log passwords, tokens, or private customer data.
+ * Dispatch an enquiry email via the Resend HTTPS API (Port 443).
+ * Never uses SMTP ports (25, 465, 587) which are blocked by Render Free services.
+ * Sanitizes errors: never logs API keys, passwords, or customer personal info.
  */
-const dispatchEnquiryEmail = async (mailOptions) => {
-  const user = (process.env.SMTP_USERNAME || process.env.EMAIL_USER || '').trim()
-  const pass = (process.env.SMTP_PASSWORD || process.env.EMAIL_PASS || '').replace(/\s+/g, '').trim()
-  const host = (process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com').trim()
-  const explicitPort = process.env.SMTP_PORT || process.env.EMAIL_PORT
+const dispatchEnquiryEmail = async ({
+  name,
+  email,
+  phone,
+  service,
+  message,
+  product_title,
+  formattedDate,
+  attachments = [],
+  photo_url = '',
+}) => {
+  const apiKey = (process.env.RESEND_API_KEY || '').trim()
+  const receiver = (process.env.RECEIVER_EMAIL || process.env.BUSINESS_EMAIL || 'reyaneshstudio@gmail.com').trim()
+  const rawSender = (process.env.VERIFIED_SENDER_EMAIL || process.env.SENDER_EMAIL || 'onboarding@resend.dev').trim()
 
-  if (!user || !pass) {
-    console.warn('⚠️ [SMTP Diagnostic] EMAIL_USER or EMAIL_PASS not configured. Skipping email dispatch.')
-    return { sent: false, error: 'Email credentials not configured on server' }
+  if (!apiKey) {
+    console.warn('⚠️ [Resend Diagnostic] RESEND_API_KEY is not configured in environment. Lead has been saved safely to database, but HTTPS email dispatch is skipped.')
+    return {
+      sent: false,
+      reason: 'unconfigured',
+      error: 'RESEND_API_KEY not configured on server',
+    }
   }
 
-  // Common transporter factory with explicit timeouts & forced IPv4
-  const createTransportForPort = (port, secure) => {
-    return nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: { user, pass },
-      family: 4,               // Force IPv4 to prevent cloud IPv6 black-hole connection hangs
-      connectionTimeout: 6000, // 6s max to establish TCP connection
-      greetingTimeout: 4000,   // 4s max to receive SMTP banner
-      socketTimeout: 8000,     // 8s max socket inactivity timeout
-      dnsTimeout: 3000,        // 3s max DNS resolution timeout
-      tls: {
-        rejectUnauthorized: false,
-        minVersion: 'TLSv1.2',
-      },
-    })
+  // Format sender: "Reyansh Studio <onboarding@resend.dev>" or "Reyansh Studio <enquiry@yourdomain.com>"
+  let formattedSender = rawSender
+  if (!rawSender.includes('<') && !rawSender.includes('"')) {
+    formattedSender = `Reyansh Studio <${rawSender}>`
   }
 
-  // Determine primary port and security mode
-  const primaryPort = explicitPort ? Number(explicitPort) : 465
-  const primarySecure = process.env.EMAIL_SECURE === 'true' || primaryPort === 465
+  const subjectTag = product_title ? ` [${product_title}]` : ''
+  const subject = `🌟 New Furniture Enquiry: ${name}${subjectTag} (${service})`
 
-  console.log(`📡 [SMTP Diagnostic] Attempting delivery: host=${host}, port=${primaryPort}, secure=${primarySecure}, family=IPv4`)
+  // Format design photo snapshot in HTML
+  let photoSectionHtml = ''
+  if (attachments.length > 0 && attachments[0].contentId) {
+    photoSectionHtml = `
+      <div style="background-color: #1a1b22; padding: 18px; border-radius: 8px; border: 1px solid #282a36; margin: 20px 0; text-align: center;">
+        <div style="font-size: 12px; font-weight: 600; color: #c9a96e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Attached Design Photo</div>
+        <img src="cid:${attachments[0].contentId}" alt="Customer Photo Reference" style="max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid #333;" />
+        <div style="color: #9ca3af; font-size: 12px; margin-top: 8px;">${escapeHtml(attachments[0].filename || 'Uploaded Reference Photo')}</div>
+      </div>
+    `
+  } else if (photo_url) {
+    photoSectionHtml = `
+      <div style="background-color: #1a1b22; padding: 18px; border-radius: 8px; border: 1px solid #282a36; margin: 20px 0; text-align: center;">
+        <div style="font-size: 12px; font-weight: 600; color: #c9a96e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">Gallery Reference Photo</div>
+        <p style="margin: 0; font-size: 13px;">
+          <a href="${escapeHtml(photo_url)}" target="_blank" style="color: #93c5fd; text-decoration: underline;">View Full Resolution Photo: ${escapeHtml(photo_url)}</a>
+        </p>
+      </div>
+    `
+  }
 
-  // Primary attempt
+  const htmlContent = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background-color: #121316; color: #f3f4f6; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a2e;">
+      <div style="background: linear-gradient(135deg, #1f1b13 0%, #2a2215 100%); padding: 32px 24px; text-align: center; border-bottom: 2px solid #c9a86a;">
+        <h1 style="color: #c9a86a; margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase;">REYANSH STUDIO</h1>
+        <p style="color: #d1d5db; margin: 8px 0 0; font-size: 14px;">Let Your Dream Come Alive &bull; Design &bull; Create &bull; Inspire</p>
+      </div>
+      
+      <div style="padding: 28px 24px;">
+        <p style="font-size: 15px; line-height: 1.6; margin-top: 0; color: #e5e7eb;">
+          A customer has submitted a furniture enquiry through your website:
+        </p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #1a1b20; border-radius: 8px; overflow: hidden; border: 1px solid #2e3038;">
+          <tr>
+            <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; width: 140px; border-bottom: 1px solid #2e3038;">Client Name</td>
+            <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;"><strong>${escapeHtml(name)}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Email Address</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #2e3038;"><a href="mailto:${escapeHtml(email)}" style="color: #93c5fd; text-decoration: none;">${escapeHtml(email)}</a></td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Phone Number</td>
+            <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">${phone ? `<a href="tel:${escapeHtml(phone)}" style="color: #93c5fd; text-decoration: none;">${escapeHtml(phone)}</a>` : 'Not provided'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Service Interested</td>
+            <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">${escapeHtml(service)}</td>
+          </tr>
+          ${
+            product_title
+              ? `
+          <tr>
+            <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Design Reference</td>
+            <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">
+              <span style="background: rgba(201, 169, 110, 0.2); color: #c9a86a; padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 13px;">${escapeHtml(product_title)}</span>
+            </td>
+          </tr>
+          `
+              : ''
+          }
+          <tr>
+            <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a;">Received Date</td>
+            <td style="padding: 12px 16px; color: #9ca3af;">${formattedDate}</td>
+          </tr>
+        </table>
+
+        ${photoSectionHtml}
+
+        <div style="background-color: #1a1b22; padding: 18px; border-radius: 8px; border-left: 4px solid #c9a86a; margin-bottom: 24px;">
+          <h4 style="margin: 0 0 10px; color: #c9a86a; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Customer's Message</h4>
+          <p style="margin: 0; line-height: 1.6; white-space: pre-wrap; color: #e5e7eb;">${escapeHtml(message)}</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 26px;">
+          <a href="mailto:${escapeHtml(email)}?subject=Regarding%20your%20furniture%20enquiry%20with%20Reyansh%20Studio" style="background-color: #c9a86a; color: #111; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px; display: inline-block;">Reply to ${escapeHtml(name)}</a>
+        </div>
+      </div>
+
+      <div style="background-color: #0b0c0e; padding: 14px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #222;">
+        Reyansh Studio Notification Engine &bull; <a href="https://reyanshstudio.com" style="color: #c9a86a; text-decoration: none;">reyanshstudio.com</a>
+      </div>
+    </div>
+  `
+
+  // Build Resend payload
+  const resendPayload = {
+    from: formattedSender,
+    to: [receiver],
+    replyTo: email,
+    subject,
+    html: htmlContent,
+  }
+
+  // Format attachments for Resend if present
+  if (attachments.length > 0) {
+    resendPayload.attachments = attachments.map((att) => ({
+      filename: att.filename || 'enquiry-photo.jpg',
+      content: att.content, // Buffer or base64
+      contentType: att.contentType,
+      contentId: att.contentId,
+    }))
+  }
+
+  console.log(`📡 [Resend HTTPS] Dispatching enquiry email via HTTPS to: ${receiver}`)
+
   try {
-    const transporter = createTransportForPort(primaryPort, primarySecure)
-    const info = await Promise.race([
-      transporter.sendMail(mailOptions),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`SMTP connection timed out after 7s on port ${primaryPort}`)), 7000)
-      ),
-    ])
+    const resend = new Resend(apiKey)
 
-    console.log(`✅ [SMTP Diagnostic] Email delivered successfully. Message ID: ${info.messageId || 'confirmed'}`)
-    return { sent: true, messageId: info.messageId }
-  } catch (primaryErr) {
-    const safeErrorMsg = primaryErr.message || primaryErr.code || 'Connection error'
-    console.warn(`⚠️ [SMTP Diagnostic] Primary attempt failed on port ${primaryPort}: code=${primaryErr.code || 'N/A'}, message=${safeErrorMsg}`)
+    // Call Resend API with an explicit 10s promise timeout
+    const sendPromise = resend.emails.send(resendPayload)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Resend HTTPS request timed out after 10s')), 10000)
+    )
 
-    // If port was explicitly specified in environment, do not attempt fallback port
-    if (explicitPort) {
-      return { sent: false, error: safeErrorMsg }
+    const response = await Promise.race([sendPromise, timeoutPromise])
+
+    if (response.error) {
+      const errName = response.error.name || 'ResendError'
+      const errMsg = response.error.message || 'Unknown Resend error'
+      console.warn(`⚠️ [Resend Diagnostic] Email rejected (${errName}): ${errMsg}`)
+      return {
+        sent: false,
+        error: errMsg,
+      }
     }
 
-    // Attempt alternate standard port (587 STARTTLS if 465 timed out, or 465 SSL if 587 timed out)
-    const fallbackPort = primaryPort === 465 ? 587 : 465
-    const fallbackSecure = fallbackPort === 465
-    console.log(`🔄 [SMTP Diagnostic] Retrying via alternate port: port=${fallbackPort}, secure=${fallbackSecure}...`)
+    if (response.data && response.data.id) {
+      console.log(`✅ [Resend Diagnostic] Email accepted by Resend over HTTPS. Message ID: ${response.data.id}`)
+      return {
+        sent: true,
+        messageId: response.data.id,
+      }
+    }
 
-    try {
-      const fallbackTransporter = createTransportForPort(fallbackPort, fallbackSecure)
-      const info = await Promise.race([
-        fallbackTransporter.sendMail(mailOptions),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`SMTP connection timed out after 6s on fallback port ${fallbackPort}`)), 6000)
-        ),
-      ])
-
-      console.log(`✅ [SMTP Diagnostic] Email delivered via fallback port ${fallbackPort}. Message ID: ${info.messageId || 'confirmed'}`)
-      return { sent: true, messageId: info.messageId }
-    } catch (fallbackErr) {
-      const fallbackSafeMsg = fallbackErr.message || fallbackErr.code || 'Fallback timeout'
-      console.warn(`⚠️ [SMTP Diagnostic] Fallback attempt also failed on port ${fallbackPort}: code=${fallbackErr.code || 'N/A'}, message=${fallbackSafeMsg}`)
-      return { sent: false, error: fallbackSafeMsg }
+    return {
+      sent: false,
+      error: 'Unexpected response from Resend API',
+    }
+  } catch (err) {
+    console.warn(`⚠️ [Resend Diagnostic] HTTPS request failed: ${err.message || 'Network error'}`)
+    return {
+      sent: false,
+      error: err.message || 'HTTPS request failed',
     }
   }
 }
@@ -483,25 +580,16 @@ app.post(
       if (photo_filename) console.log(`   Photo   : ${photo_filename}`)
       console.log(`   Message : ${newLead.message.slice(0, 100)}...\n`)
 
-      // 3. Prepare Email Notification with attachments and rich HTML
-      const recipient = process.env.RECEIVER_EMAIL || 'reyaneshstudio@gmail.com'
+      // 3. Prepare attachments for email
       const attachments = []
-      let photoSectionHtml = ''
 
       if (req.file && req.file.buffer) {
         attachments.push({
           filename: req.file.originalname || 'enquiry-photo.jpg',
           content: req.file.buffer,
           contentType: req.file.mimetype || 'image/jpeg',
-          cid: 'enquiry_photo',
+          contentId: 'enquiry_photo',
         })
-        photoSectionHtml = `
-          <div style="background-color: #1a1b22; padding: 18px; border-radius: 8px; border: 1px solid #282a36; margin: 20px 0; text-align: center;">
-            <div style="font-size: 12px; font-weight: 600; color: #c9a96e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Attached Design Photo</div>
-            <img src="cid:enquiry_photo" alt="Customer Photo Reference" style="max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid #333;" />
-            <div style="color: #9ca3af; font-size: 12px; margin-top: 8px;">${escapeHtml(req.file.originalname || 'Uploaded Photo')}</div>
-          </div>
-        `
       } else if (photo_data && photo_data.includes('base64,')) {
         try {
           const parts = photo_data.split('base64,')
@@ -512,116 +600,39 @@ app.post(
             filename: photo_filename || 'enquiry-photo.jpg',
             content: buffer,
             contentType: mimeType,
-            cid: 'enquiry_photo',
+            contentId: 'enquiry_photo',
           })
-          photoSectionHtml = `
-            <div style="background-color: #1a1b22; padding: 18px; border-radius: 8px; border: 1px solid #282a36; margin: 20px 0; text-align: center;">
-              <div style="font-size: 12px; font-weight: 600; color: #c9a96e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Attached Design Photo</div>
-              <img src="cid:enquiry_photo" alt="Customer Photo Reference" style="max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid #333;" />
-              <div style="color: #9ca3af; font-size: 12px; margin-top: 8px;">${escapeHtml(photo_filename || 'Uploaded Reference Photo')}</div>
-            </div>
-          `
         } catch (attachErr) {
           console.warn('Failed to parse base64 photo for attachment:', attachErr.message)
         }
-      } else if (photo_url) {
-        photoSectionHtml = `
-          <div style="background-color: #1a1b22; padding: 18px; border-radius: 8px; border: 1px solid #282a36; margin: 20px 0; text-align: center;">
-            <div style="font-size: 12px; font-weight: 600; color: #c9a96e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">Gallery Reference Photo</div>
-            <p style="margin: 0; font-size: 13px;">
-              <a href="${escapeHtml(photo_url)}" target="_blank" style="color: #93c5fd; text-decoration: underline;">View Full Resolution Photo: ${escapeHtml(photo_url)}</a>
-            </p>
-          </div>
-        `
       }
 
-      const subjectTag = product_title ? ` [${product_title}]` : ''
-      const ownerMailOptions = {
-        from: `"Reyansh Studio Website" <${process.env.EMAIL_USER || 'reyaneshstudio@gmail.com'}>`,
-        to: recipient,
-        replyTo: email,
-        subject: `🌟 New Furniture Enquiry: ${name}${subjectTag} (${service})`,
+      // 4. Dispatch Email via Resend HTTPS API - NEVER blocks indefinitely
+      const emailResult = await dispatchEnquiryEmail({
+        name,
+        email,
+        phone,
+        service,
+        message,
+        product_title,
+        formattedDate,
         attachments,
-        html: `
-          <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background-color: #121316; color: #f3f4f6; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a2e;">
-            <div style="background: linear-gradient(135deg, #1f1b13 0%, #2a2215 100%); padding: 32px 24px; text-align: center; border-bottom: 2px solid #c9a86a;">
-              <h1 style="color: #c9a86a; margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase;">REYANSH STUDIO</h1>
-              <p style="color: #d1d5db; margin: 8px 0 0; font-size: 14px;">Let Your Dream Come Alive &bull; Design &bull; Create &bull; Inspire</p>
-            </div>
-            
-            <div style="padding: 28px 24px;">
-              <p style="font-size: 15px; line-height: 1.6; margin-top: 0; color: #e5e7eb;">
-                A customer has submitted a furniture enquiry through your website:
-              </p>
-
-              <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #1a1b20; border-radius: 8px; overflow: hidden; border: 1px solid #2e3038;">
-                <tr>
-                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; width: 140px; border-bottom: 1px solid #2e3038;">Client Name</td>
-                  <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;"><strong>${escapeHtml(name)}</strong></td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Email Address</td>
-                  <td style="padding: 12px 16px; border-bottom: 1px solid #2e3038;"><a href="mailto:${escapeHtml(email)}" style="color: #93c5fd; text-decoration: none;">${escapeHtml(email)}</a></td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Phone Number</td>
-                  <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">${phone ? `<a href="tel:${escapeHtml(phone)}" style="color: #93c5fd; text-decoration: none;">${escapeHtml(phone)}</a>` : 'Not provided'}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Service Interested</td>
-                  <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">${escapeHtml(service)}</td>
-                </tr>
-                ${
-                  product_title
-                    ? `
-                <tr>
-                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a; border-bottom: 1px solid #2e3038;">Design Reference</td>
-                  <td style="padding: 12px 16px; color: #ffffff; border-bottom: 1px solid #2e3038;">
-                    <span style="background: rgba(201, 169, 110, 0.2); color: #c9a86a; padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 13px;">${escapeHtml(product_title)}</span>
-                  </td>
-                </tr>
-                `
-                    : ''
-                }
-                <tr>
-                  <td style="padding: 12px 16px; font-weight: 600; color: #c9a86a;">Received Date</td>
-                  <td style="padding: 12px 16px; color: #9ca3af;">${formattedDate}</td>
-                </tr>
-              </table>
-
-              ${photoSectionHtml}
-
-              <div style="background-color: #1a1b20; padding: 18px; border-radius: 8px; border-left: 4px solid #c9a86a; margin-bottom: 24px;">
-                <h4 style="margin: 0 0 10px; color: #c9a86a; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Customer's Message</h4>
-                <p style="margin: 0; line-height: 1.6; white-space: pre-wrap; color: #e5e7eb;">${escapeHtml(message)}</p>
-              </div>
-
-              <div style="text-align: center; margin-top: 26px;">
-                <a href="mailto:${escapeHtml(email)}?subject=Regarding%20your%20furniture%20enquiry%20with%20Reyansh%20Studio" style="background-color: #c9a86a; color: #111; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px; display: inline-block;">Reply to ${escapeHtml(name)}</a>
-              </div>
-            </div>
-
-            <div style="background-color: #0b0c0e; padding: 14px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #222;">
-              Reyansh Studio Notification Engine &bull; <a href="https://reyanshstudio.com" style="color: #c9a86a; text-decoration: none;">reyanshstudio.com</a>
-            </div>
-          </div>
-        `,
-      }
-
-      // 4. Dispatch Email with fast timeout - NEVER wait indefinitely
-      const emailResult = await dispatchEnquiryEmail(ownerMailOptions)
+        photo_url,
+      })
 
       if (emailResult.sent) {
         newLead.emailSent = true
+        newLead.messageId = emailResult.messageId
         const updatedList = getConsultations()
         const idx = updatedList.findIndex(c => c.id === newLead.id)
         if (idx !== -1) {
           updatedList[idx].emailSent = true
+          updatedList[idx].messageId = emailResult.messageId
           saveConsultations(updatedList)
         }
       } else {
         newLead.emailSent = false
-        newLead.emailNote = emailResult.error || 'Email delayed or skipped'
+        newLead.emailNote = emailResult.error || 'Email skipped or pending configuration'
         const updatedList = getConsultations()
         const idx = updatedList.findIndex(c => c.id === newLead.id)
         if (idx !== -1) {
@@ -834,6 +845,7 @@ app.listen(PORT, () => {
   console.log(`\n======================================================`)
   console.log(`✨ Reyansh Studio Backend running on http://localhost:${PORT}`)
   console.log(`✨ Health Check: http://localhost:${PORT}/api/health`)
+  console.log(`✨ Email Engine: Resend HTTPS API (Port 443)`)
   console.log(`✨ Consultations API: http://localhost:${PORT}/api/consultations`)
   console.log(`✨ Contact / Photo Enquiry: http://localhost:${PORT}/api/contact`)
   console.log(`✨ Gallery API: http://localhost:${PORT}/api/gallery`)
