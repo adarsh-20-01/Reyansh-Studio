@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles, MessageSquare, Phone, Mail, CheckCircle, Camera, ArrowRight, X, ZoomIn } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import ServiceCard from '../components/ServiceCard'
 import ServiceDetailModal from '../components/ServiceDetailModal'
 import ContactForm from '../components/ContactForm'
@@ -8,8 +9,21 @@ import CTASection from '../components/CTASection'
 import { servicesData } from '../data/servicesData'
 
 export default function Services() {
+  const [searchParams] = useSearchParams()
   const [selectedService, setSelectedService] = useState(null)
   const [activePortalService, setActivePortalService] = useState(servicesData[1]) // Default: Custom Sofa
+
+  // Auto-open service detail modal when ?service=<id> is in the URL
+  useEffect(() => {
+    const serviceId = searchParams.get('service')
+    if (serviceId) {
+      const match = servicesData.find(s => s.id === serviceId)
+      if (match) {
+        setSelectedService(match)
+        setActivePortalService(match)
+      }
+    }
+  }, [searchParams])
   const [svcPhoto, setSvcPhoto] = useState(null) // { image, title } for lightbox
   const [svcZoom, setSvcZoom] = useState(1)
 

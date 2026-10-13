@@ -50,12 +50,12 @@ export default function Footer() {
           <div className="footer-col">
             <h4>Services</h4>
             <ul>
-              <li><Link to="/services">Home Interior</Link></li>
-              <li><Link to="/services">Custom Sofa</Link></li>
-              <li><Link to="/services">Kitchen Cabinet</Link></li>
-              <li><Link to="/services">T. V. Units & Beds</Link></li>
-              <li><Link to="/services">Wardrobes & Dining Table</Link></li>
-              <li><Link to="/services">Curtains & Styling</Link></li>
+              <li><Link to="/services?service=home-interior">Home Interior</Link></li>
+              <li><Link to="/services?service=custom-sofa">Custom Sofa</Link></li>
+              <li><Link to="/services?service=kitchen-cabinet">Kitchen Cabinet</Link></li>
+              <li><Link to="/services?service=tv-units">T. V. Units & Beds</Link></li>
+              <li><Link to="/services?service=wardrobes">Wardrobes & Dining Table</Link></li>
+              <li><Link to="/services?service=curtains-drapes">Curtains & Styling</Link></li>
             </ul>
           </div>
           <div className="footer-col">
