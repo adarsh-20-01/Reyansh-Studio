@@ -525,3 +525,161 @@ textarea:focus-visible {
     height: 42px;
   }
 }
+
+/* ========== GALLERY LIGHTBOX ZOOM CONTROLS ========== */
+.lb-zoom-wrapper {
+  position: relative;
+}
+.lb-zoom-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(10, 10, 10, 0.75);
+  border: 1px solid rgba(201, 169, 110, 0.35);
+  border-radius: 24px;
+  padding: 5px 10px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+}
+.lb-zoom-wrapper:hover .lb-zoom-controls,
+.lb-zoom-wrapper:focus-within .lb-zoom-controls {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* Always show zoom controls on touch devices */
+  .lb-zoom-controls { opacity: 1; }
+}
+.lb-zoom-btn {
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-size: 1.1rem;
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s;
+  line-height: 1;
+}
+.lb-zoom-btn:hover {
+  background: rgba(201, 169, 110, 0.18);
+}
+.lb-zoom-level {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.72rem;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.lb-zoom-reset {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ========== SERVICES SECTION PHOTO LIGHTBOX ========== */
+.svc-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: rgba(5, 5, 5, 0.96);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.svc-lightbox-img-wrap {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(201, 169, 110, 0.3);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+  max-width: 820px;
+  width: 100%;
+  max-height: 72vh;
+  background: #0e0e11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-in;
+}
+.svc-lightbox-img-wrap img {
+  max-width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+}
+.svc-lightbox-caption {
+  margin-top: 14px;
+  text-align: center;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 500;
+  font-family: var(--font-heading);
+}
+.svc-lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  font-size: 1.3rem;
+  transition: background 0.2s;
+  z-index: 5;
+  line-height: 1;
+}
+.svc-lightbox-close:hover { background: rgba(255, 255, 255, 0.18); }
+.svc-photo-thumb {
+  cursor: zoom-in;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.svc-photo-thumb:hover {
+  transform: scale(1.04);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+.svc-photo-thumb img {
+  transition: filter 0.25s ease;
+}
+.svc-photo-thumb:hover img {
+  filter: brightness(1.1);
+}
+/* Zoom icon overlay on thumb hover */
+.svc-photo-thumb-inner {
+  position: relative;
+}
+.svc-photo-thumb-inner::after {
+  content: '🔍';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.2s;
+  border-radius: 8px 8px 0 0;
+}
+.svc-photo-thumb:hover .svc-photo-thumb-inner::after {
+  opacity: 1;
+}

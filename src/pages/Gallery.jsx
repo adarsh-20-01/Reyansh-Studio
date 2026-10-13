@@ -192,6 +192,7 @@ export default function Gallery() {
   const { isAdmin } = useAuth()
   const [filter, setFilter] = useState('All')
   const [lightbox, setLightbox] = useState(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
   const [enquiryModalItem, setEnquiryModalItem] = useState(null)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [customPhotos, setCustomPhotos] = useState([])
@@ -269,17 +270,23 @@ export default function Gallery() {
     setTimeout(() => setToastMessage(''), 3500)
   }
 
+  // Reset zoom when lightbox image changes
+  useEffect(() => { setZoomLevel(1) }, [lightbox])
+
   // Keyboard navigation and body scroll lock for lightbox
   useEffect(() => {
     if (lightbox === null) return
     const handleKeyDown = e => {
-      if (e.key === 'Escape') setLightbox(null)
+      if (e.key === 'Escape') { setLightbox(null); setZoomLevel(1) }
       if (e.key === 'ArrowLeft') {
         setLightbox(curr => (curr - 1 + filteredImages.length) % filteredImages.length)
       }
       if (e.key === 'ArrowRight') {
         setLightbox(curr => (curr + 1) % filteredImages.length)
       }
+      if (e.key === '+' || e.key === '=') setZoomLevel(z => Math.min(4, +(z + 0.25).toFixed(2)))
+      if (e.key === '-') setZoomLevel(z => Math.max(0.5, +(z - 0.25).toFixed(2)))
+      if (e.key === '0') setZoomLevel(1)
     }
     window.addEventListener('keydown', handleKeyDown)
     document.body.style.overflow = 'hidden'
@@ -291,8 +298,15 @@ export default function Gallery() {
 
   const currentItem = lightbox !== null ? filteredImages[lightbox] : null
 
-  const prev = () => setLightbox(i => (i - 1 + filteredImages.length) % filteredImages.length)
-  const next = () => setLightbox(i => (i + 1) % filteredImages.length)
+  const prev = () => { setLightbox(i => (i - 1 + filteredImages.length) % filteredImages.length); setZoomLevel(1) }
+  const next = () => { setLightbox(i => (i + 1) % filteredImages.length); setZoomLevel(1) }
+
+  // Wheel zoom handler for lightbox image
+  const handleLightboxWheel = e => {
+    e.preventDefault()
+    const delta = e.deltaY < 0 ? 0.15 : -0.15
+    setZoomLevel(z => Math.min(4, Math.max(0.5, +(z + delta).toFixed(2))))
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
@@ -732,29 +746,72 @@ export default function Gallery() {
                 maxHeight: '90vh',
               }}
             >
+              {/* Zoomable Image Wrapper */}
               <div
+                className="lb-zoom-wrapper"
+                onWheel={handleLightboxWheel}
                 style={{
                   borderRadius: 12,
-                  overflow: 'hidden',
+                  overflow: zoomLevel > 1 ? 'auto' : 'hidden',
                   border: '1px solid var(--border-gold)',
                   boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
                   background: '#0e0e11',
                   maxHeight: '68vh',
+                  width: '100%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  position: 'relative',
+                  cursor: zoomLevel > 1 ? 'grab' : 'zoom-in',
                 }}
               >
                 <img
                   src={currentItem.image}
                   alt={currentItem.title}
+                  draggable={false}
                   style={{
-                    maxWidth: '100%',
-                    maxHeight: '68vh',
+                    maxWidth: zoomLevel <= 1 ? '100%' : 'none',
+                    maxHeight: zoomLevel <= 1 ? '68vh' : 'none',
+                    width: zoomLevel > 1 ? `${zoomLevel * 100}%` : undefined,
                     objectFit: 'contain',
                     display: 'block',
+                    transition: 'transform 0.2s ease, width 0.2s ease',
+                    transform: `scale(${zoomLevel <= 1 ? zoomLevel : 1})`,
+                    transformOrigin: 'center center',
+                    userSelect: 'none',
                   }}
                 />
+
+                {/* Subtle zoom controls — fade in on hover */}
+                <div className="lb-zoom-controls" onClick={e => e.stopPropagation()}>
+                  <button
+                    className="lb-zoom-btn"
+                    onClick={() => setZoomLevel(z => Math.min(4, +(z + 0.25).toFixed(2)))}
+                    title="Zoom In (+)"
+                    aria-label="Zoom In"
+                  >
+                    +
+                  </button>
+                  <span className="lb-zoom-level">{Math.round(zoomLevel * 100)}%</span>
+                  <button
+                    className="lb-zoom-btn"
+                    onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.25).toFixed(2)))}
+                    title="Zoom Out (-)"
+                    aria-label="Zoom Out"
+                  >
+                    −
+                  </button>
+                  {zoomLevel !== 1 && (
+                    <button
+                      className="lb-zoom-btn lb-zoom-reset"
+                      onClick={() => setZoomLevel(1)}
+                      title="Reset Zoom (0)"
+                      aria-label="Reset Zoom"
+                    >
+                      ↺
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Caption and Inquire Button */}

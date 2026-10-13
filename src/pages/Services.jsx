@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Sparkles, MessageSquare, Phone, Mail, CheckCircle, Camera, ArrowRight } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Sparkles, MessageSquare, Phone, Mail, CheckCircle, Camera, ArrowRight, X, ZoomIn } from 'lucide-react'
 import ServiceCard from '../components/ServiceCard'
 import ServiceDetailModal from '../components/ServiceDetailModal'
 import ContactForm from '../components/ContactForm'
@@ -10,6 +10,35 @@ import { servicesData } from '../data/servicesData'
 export default function Services() {
   const [selectedService, setSelectedService] = useState(null)
   const [activePortalService, setActivePortalService] = useState(servicesData[1]) // Default: Custom Sofa
+  const [svcPhoto, setSvcPhoto] = useState(null) // { image, title } for lightbox
+  const [svcZoom, setSvcZoom] = useState(1)
+
+  const openSvcPhoto = useCallback((p) => { setSvcPhoto(p); setSvcZoom(1) }, [])
+  const closeSvcPhoto = useCallback(() => { setSvcPhoto(null); setSvcZoom(1) }, [])
+
+  const handleSvcWheel = (e) => {
+    e.preventDefault()
+    const delta = e.deltaY < 0 ? 0.2 : -0.2
+    setSvcZoom(z => Math.min(4, Math.max(0.5, +(z + delta).toFixed(2))))
+  }
+
+  // Keyboard + body scroll lock for services photo lightbox
+  useEffect(() => {
+    if (!svcPhoto) return
+    const onKey = e => {
+      if (e.key === 'Escape') closeSvcPhoto()
+      if (e.key === '+' || e.key === '=') setSvcZoom(z => Math.min(4, +(z + 0.25).toFixed(2)))
+      if (e.key === '-') setSvcZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))
+      if (e.key === '0') setSvcZoom(1)
+    }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [svcPhoto, closeSvcPhoto])
+
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
@@ -155,14 +184,20 @@ export default function Services() {
                     {activePortalService.photos.slice(0, 4).map((p, idx) => (
                       <div
                         key={idx}
+                        className="svc-photo-thumb"
                         style={{
                           borderRadius: '8px',
                           overflow: 'hidden',
                           border: '1px solid rgba(255,255,255,0.1)',
                           background: '#09090b',
                         }}
+                        onClick={() => openSvcPhoto(p)}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`View photo: ${p.title}`}
+                        onKeyDown={e => e.key === 'Enter' && openSvcPhoto(p)}
                       >
-                        <div style={{ height: 85, overflow: 'hidden' }}>
+                        <div className="svc-photo-thumb-inner" style={{ height: 85, overflow: 'hidden' }}>
                           <img
                             src={p.image}
                             alt={p.title}
@@ -230,6 +265,68 @@ export default function Services() {
         isOpen={Boolean(selectedService)}
         onClose={() => setSelectedService(null)}
       />
+
+      {/* Services Section Photo Lightbox */}
+      <AnimatePresence>
+        {svcPhoto && (
+          <motion.div
+            className="svc-lightbox-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            onClick={closeSvcPhoto}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Photo: ${svcPhoto.title}`}
+          >
+            <button className="svc-lightbox-close" onClick={closeSvcPhoto} aria-label="Close photo">
+              ×
+            </button>
+
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 820, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+            >
+              <div
+                className="lb-zoom-wrapper svc-lightbox-img-wrap"
+                onWheel={handleSvcWheel}
+                style={{ cursor: svcZoom > 1 ? 'grab' : 'zoom-in', overflow: svcZoom > 1 ? 'auto' : 'hidden' }}
+              >
+                <img
+                  src={svcPhoto.image}
+                  alt={svcPhoto.title}
+                  draggable={false}
+                  style={{
+                    maxWidth: svcZoom <= 1 ? '100%' : 'none',
+                    maxHeight: svcZoom <= 1 ? '72vh' : 'none',
+                    width: svcZoom > 1 ? `${svcZoom * 100}%` : undefined,
+                    objectFit: 'contain',
+                    display: 'block',
+                    userSelect: 'none',
+                    transition: 'width 0.2s ease',
+                  }}
+                />
+                {/* Zoom controls — fade in on hover */}
+                <div className="lb-zoom-controls" onClick={e => e.stopPropagation()}>
+                  <button className="lb-zoom-btn" onClick={() => setSvcZoom(z => Math.min(4, +(z + 0.25).toFixed(2)))} aria-label="Zoom In" title="Zoom In">+</button>
+                  <span className="lb-zoom-level">{Math.round(svcZoom * 100)}%</span>
+                  <button className="lb-zoom-btn" onClick={() => setSvcZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom Out" title="Zoom Out">−</button>
+                  {svcZoom !== 1 && (
+                    <button className="lb-zoom-btn lb-zoom-reset" onClick={() => setSvcZoom(1)} aria-label="Reset Zoom" title="Reset">↺</button>
+                  )}
+                </div>
+              </div>
+              <p className="svc-lightbox-caption">{svcPhoto.title}</p>
+              <p style={{ color: 'var(--gold)', fontSize: '0.75rem', marginTop: 4 }}>Scroll to zoom · +/− keys · Click outside to close</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
