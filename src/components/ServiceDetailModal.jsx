@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X,
@@ -13,11 +13,14 @@ import {
   Check,
   ChevronRight,
   ArrowRight,
+  ZoomIn,
 } from 'lucide-react'
 import { apiUrl } from '../config/api'
 
 export default function ServiceDetailModal({ service, isOpen, onClose }) {
   const [selectedPhoto, setSelectedPhoto] = useState(null)
+  const [zoomPhoto, setZoomPhoto] = useState(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -28,6 +31,21 @@ export default function ServiceDetailModal({ service, isOpen, onClose }) {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
   const [emailNotice, setEmailNotice] = useState('')
+
+  const openZoom = useCallback((p, e) => {
+    if (e) e.stopPropagation()
+    setZoomPhoto(p)
+    setZoomLevel(1)
+  }, [])
+  const closeZoom = useCallback(() => {
+    setZoomPhoto(null)
+    setZoomLevel(1)
+  }, [])
+  const handleZoomWheel = useCallback((e) => {
+    e.preventDefault()
+    const d = e.deltaY < 0 ? 0.2 : -0.2
+    setZoomLevel(z => Math.min(4, Math.max(0.5, +(z + d).toFixed(2))))
+  }, [])
 
   useEffect(() => {
     if (service) {
@@ -48,7 +66,14 @@ export default function ServiceDetailModal({ service, isOpen, onClose }) {
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        if (zoomPhoto) { closeZoom() } else { onClose() }
+      }
+      if (zoomPhoto) {
+        if (e.key === '+' || e.key === '=') setZoomLevel(z => Math.min(4, +(z + 0.25).toFixed(2)))
+        if (e.key === '-') setZoomLevel(z => Math.max(0.5, +(z - 0.25).toFixed(2)))
+        if (e.key === '0') setZoomLevel(1)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     document.body.style.overflow = 'hidden'
@@ -56,7 +81,7 @@ export default function ServiceDetailModal({ service, isOpen, onClose }) {
       window.removeEventListener('keydown', handleKeyDown)
       document.body.style.overflow = ''
     }
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, zoomPhoto, closeZoom])
 
   if (!isOpen || !service) return null
 
@@ -369,6 +394,7 @@ Please let me know pricing, custom options, and how we can get started.`
                         <div
                           key={idx}
                           onClick={() => setSelectedPhoto(p)}
+                          className="svc-photo-thumb"
                           style={{
                             borderRadius: '10px',
                             overflow: 'hidden',
@@ -384,7 +410,7 @@ Please let me know pricing, custom options, and how we can get started.`
                             transition: 'all 0.2s ease',
                           }}
                         >
-                          <div style={{ height: 95, overflow: 'hidden' }}>
+                          <div className="svc-photo-thumb-inner" style={{ height: 95, overflow: 'hidden', position: 'relative' }}>
                             <img
                               src={p.image}
                               alt={p.title}
@@ -395,6 +421,35 @@ Please let me know pricing, custom options, and how we can get started.`
                                 transition: 'transform 0.3s',
                               }}
                             />
+                            {/* Zoom magnifier button */}
+                            <button
+                              type="button"
+                              onClick={(e) => openZoom(p, e)}
+                              aria-label={`Zoom into ${p.title}`}
+                              title="Zoom In"
+                              style={{
+                                position: 'absolute',
+                                bottom: 6,
+                                right: 6,
+                                background: 'rgba(10, 10, 10, 0.75)',
+                                border: '1px solid rgba(201, 169, 110, 0.5)',
+                                borderRadius: '50%',
+                                width: 28,
+                                height: 28,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'var(--gold, #c9a96e)',
+                                cursor: 'zoom-in',
+                                zIndex: 2,
+                                opacity: 0.7,
+                                transition: 'opacity 0.2s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                              onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
+                            >
+                              <ZoomIn size={14} />
+                            </button>
                           </div>
 
                           <div style={{ padding: '6px 8px', background: '#0e0e11' }}>
@@ -760,6 +815,68 @@ Please let me know pricing, custom options, and how we can get started.`
               )}
             </div>
           </div>
+
+          {/* Zoom Photo Overlay (inside modal) */}
+          <AnimatePresence>
+            {zoomPhoto && (
+              <motion.div
+                className="svc-lightbox-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={closeZoom}
+                style={{ zIndex: 5000 }}
+              >
+                <button className="svc-lightbox-close" onClick={closeZoom} aria-label="Close zoom">
+                  ×
+                </button>
+
+                <motion.div
+                  initial={{ scale: 0.92, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.92, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={e => e.stopPropagation()}
+                  style={{ width: '100%', maxWidth: 820, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                >
+                  <div
+                    className="lb-zoom-wrapper svc-lightbox-img-wrap"
+                    onWheel={handleZoomWheel}
+                    style={{ cursor: zoomLevel > 1 ? 'grab' : 'zoom-in', overflow: zoomLevel > 1 ? 'auto' : 'hidden' }}
+                  >
+                    <img
+                      src={zoomPhoto.image}
+                      alt={zoomPhoto.title}
+                      draggable={false}
+                      style={{
+                        maxWidth: zoomLevel <= 1 ? '100%' : 'none',
+                        maxHeight: zoomLevel <= 1 ? '72vh' : 'none',
+                        width: zoomLevel > 1 ? `${zoomLevel * 100}%` : undefined,
+                        objectFit: 'contain',
+                        display: 'block',
+                        userSelect: 'none',
+                        transition: 'width 0.2s ease',
+                      }}
+                    />
+                    <div className="lb-zoom-controls" onClick={e => e.stopPropagation()}>
+                      <button className="lb-zoom-btn" onClick={() => setZoomLevel(z => Math.min(4, +(z + 0.25).toFixed(2)))} aria-label="Zoom In" title="Zoom In">+</button>
+                      <span className="lb-zoom-level">{Math.round(zoomLevel * 100)}%</span>
+                      <button className="lb-zoom-btn" onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom Out" title="Zoom Out">−</button>
+                      {zoomLevel !== 1 && (
+                        <button className="lb-zoom-btn lb-zoom-reset" onClick={() => setZoomLevel(1)} aria-label="Reset Zoom" title="Reset">↺</button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="svc-lightbox-caption">{zoomPhoto.title}</p>
+                  {zoomPhoto.caption && (
+                    <p style={{ color: 'var(--text-muted, #9ca3af)', fontSize: '0.82rem', marginTop: 2, textAlign: 'center' }}>{zoomPhoto.caption}</p>
+                  )}
+                  <p style={{ color: 'var(--gold, #c9a96e)', fontSize: '0.72rem', marginTop: 6 }}>Scroll to zoom · +/− keys · Esc to close</p>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </motion.div>
     </AnimatePresence>
