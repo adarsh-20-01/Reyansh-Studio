@@ -405,7 +405,7 @@ Please let me know pricing, dimensions, and fabric options.`
                       required
                       value={form.name}
                       onChange={e => setForm({ ...form, name: e.target.value })}
-                      placeholder="e.g. Rahul Sharma"
+                      placeholder=""
                       disabled={loading}
                       style={{
                         width: '100%',
@@ -429,7 +429,7 @@ Please let me know pricing, dimensions, and fabric options.`
                       required
                       value={form.email}
                       onChange={e => setForm({ ...form, email: e.target.value })}
-                      placeholder="you@example.com"
+                      placeholder=""
                       disabled={loading}
                       style={{
                         width: '100%',
@@ -454,7 +454,7 @@ Please let me know pricing, dimensions, and fabric options.`
                     required
                     value={form.phone}
                     onChange={e => setForm({ ...form, phone: e.target.value })}
-                    placeholder="+91 90281 88787"
+                    placeholder=""
                     disabled={loading}
                     style={{
                       width: '100%',

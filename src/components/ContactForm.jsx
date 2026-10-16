@@ -251,7 +251,7 @@ export default function ContactForm() {
                 name="name"
                 value={form.name}
                 onChange={handle}
-                placeholder="e.g. Rahul Sharma"
+                placeholder=""
                 required
                 disabled={loading}
               />
@@ -264,7 +264,7 @@ export default function ContactForm() {
                 type="email"
                 value={form.email}
                 onChange={handle}
-                placeholder="you@example.com"
+                placeholder=""
                 required
                 disabled={loading}
               />
@@ -280,7 +280,7 @@ export default function ContactForm() {
                 type="tel"
                 value={form.phone}
                 onChange={handle}
-                placeholder="+91 90281 88787"
+                placeholder=""
                 required
                 disabled={loading}
               />
@@ -311,7 +311,7 @@ export default function ContactForm() {
               name="message"
               value={form.message}
               onChange={handle}
-              placeholder="Tell us about your space, dimensions, preferred style, or requirements..."
+              placeholder=""
               rows={5}
               required
               disabled={loading}
