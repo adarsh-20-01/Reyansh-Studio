@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Sparkles, MessageSquare, Phone, Mail, CheckCircle, Camera, ArrowRight, X, ZoomIn } from 'lucide-react'
+import { Sparkles, MessageSquare, Phone, Mail, CheckCircle, Camera, ArrowRight, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import ServiceCard from '../components/ServiceCard'
 import ServiceDetailModal from '../components/ServiceDetailModal'
@@ -309,34 +309,27 @@ export default function Services() {
               <div
                 className="lb-zoom-wrapper svc-lightbox-img-wrap"
                 onWheel={handleSvcWheel}
-                style={{ cursor: svcZoom > 1 ? 'grab' : 'zoom-in', overflow: svcZoom > 1 ? 'auto' : 'hidden' }}
+                onClick={() => setSvcZoom(z => z > 1 ? 1 : 2)}
+                style={{ cursor: svcZoom > 1 ? 'zoom-out' : 'zoom-in', overflow: 'hidden' }}
               >
                 <img
                   src={svcPhoto.image}
                   alt={svcPhoto.title}
                   draggable={false}
                   style={{
-                    maxWidth: svcZoom <= 1 ? '100%' : 'none',
-                    maxHeight: svcZoom <= 1 ? '72vh' : 'none',
-                    width: svcZoom > 1 ? `${svcZoom * 100}%` : undefined,
+                    maxWidth: '100%',
+                    maxHeight: '72vh',
                     objectFit: 'contain',
                     display: 'block',
                     userSelect: 'none',
-                    transition: 'width 0.2s ease',
+                    transition: 'transform 0.3s ease',
+                    transform: svcZoom > 1 ? `scale(${svcZoom})` : 'scale(1)',
+                    transformOrigin: 'center center',
                   }}
                 />
-                {/* Zoom controls — fade in on hover */}
-                <div className="lb-zoom-controls" onClick={e => e.stopPropagation()}>
-                  <button className="lb-zoom-btn" onClick={() => setSvcZoom(z => Math.min(4, +(z + 0.25).toFixed(2)))} aria-label="Zoom In" title="Zoom In">+</button>
-                  <span className="lb-zoom-level">{Math.round(svcZoom * 100)}%</span>
-                  <button className="lb-zoom-btn" onClick={() => setSvcZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom Out" title="Zoom Out">−</button>
-                  {svcZoom !== 1 && (
-                    <button className="lb-zoom-btn lb-zoom-reset" onClick={() => setSvcZoom(1)} aria-label="Reset Zoom" title="Reset">↺</button>
-                  )}
-                </div>
               </div>
               <p className="svc-lightbox-caption">{svcPhoto.title}</p>
-              <p style={{ color: 'var(--gold)', fontSize: '0.75rem', marginTop: 4 }}>Scroll to zoom · +/− keys · Click outside to close</p>
+              <p style={{ color: 'var(--gold)', fontSize: '0.75rem', marginTop: 4 }}>Click image to zoom · Click outside to close</p>
             </motion.div>
           </motion.div>
         )}

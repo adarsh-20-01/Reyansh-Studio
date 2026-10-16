@@ -13,7 +13,6 @@ import {
   Check,
   ChevronRight,
   ArrowRight,
-  ZoomIn,
 } from 'lucide-react'
 import { apiUrl } from '../config/api'
 
@@ -377,7 +376,7 @@ Please let me know pricing, custom options, and how we can get started.`
                       <Camera size={14} /> Completed {service.title} Projects ({service.photos.length})
                     </span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #9ca3af)' }}>
-                      Click any photo to attach to enquiry
+                      Click any photo to view & attach
                     </span>
                   </div>
 
@@ -393,8 +392,7 @@ Please let me know pricing, custom options, and how we can get started.`
                       return (
                         <div
                           key={idx}
-                          onClick={() => setSelectedPhoto(p)}
-                          className="svc-photo-thumb"
+                          onClick={() => { setSelectedPhoto(p); openZoom(p) }}
                           style={{
                             borderRadius: '10px',
                             overflow: 'hidden',
@@ -410,7 +408,7 @@ Please let me know pricing, custom options, and how we can get started.`
                             transition: 'all 0.2s ease',
                           }}
                         >
-                          <div className="svc-photo-thumb-inner" style={{ height: 95, overflow: 'hidden', position: 'relative' }}>
+                          <div style={{ height: 95, overflow: 'hidden' }}>
                             <img
                               src={p.image}
                               alt={p.title}
@@ -421,35 +419,6 @@ Please let me know pricing, custom options, and how we can get started.`
                                 transition: 'transform 0.3s',
                               }}
                             />
-                            {/* Zoom magnifier button */}
-                            <button
-                              type="button"
-                              onClick={(e) => openZoom(p, e)}
-                              aria-label={`Zoom into ${p.title}`}
-                              title="Zoom In"
-                              style={{
-                                position: 'absolute',
-                                bottom: 6,
-                                right: 6,
-                                background: 'rgba(10, 10, 10, 0.75)',
-                                border: '1px solid rgba(201, 169, 110, 0.5)',
-                                borderRadius: '50%',
-                                width: 28,
-                                height: 28,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: 'var(--gold, #c9a96e)',
-                                cursor: 'zoom-in',
-                                zIndex: 2,
-                                opacity: 0.7,
-                                transition: 'opacity 0.2s',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                              onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
-                            >
-                              <ZoomIn size={14} />
-                            </button>
                           </div>
 
                           <div style={{ padding: '6px 8px', background: '#0e0e11' }}>
@@ -843,36 +812,30 @@ Please let me know pricing, custom options, and how we can get started.`
                   <div
                     className="lb-zoom-wrapper svc-lightbox-img-wrap"
                     onWheel={handleZoomWheel}
-                    style={{ cursor: zoomLevel > 1 ? 'grab' : 'zoom-in', overflow: zoomLevel > 1 ? 'auto' : 'hidden' }}
+                    onClick={() => setZoomLevel(z => z > 1 ? 1 : 2)}
+                    style={{ cursor: zoomLevel > 1 ? 'zoom-out' : 'zoom-in', overflow: 'hidden' }}
                   >
                     <img
                       src={zoomPhoto.image}
                       alt={zoomPhoto.title}
                       draggable={false}
                       style={{
-                        maxWidth: zoomLevel <= 1 ? '100%' : 'none',
-                        maxHeight: zoomLevel <= 1 ? '72vh' : 'none',
-                        width: zoomLevel > 1 ? `${zoomLevel * 100}%` : undefined,
+                        maxWidth: '100%',
+                        maxHeight: '72vh',
                         objectFit: 'contain',
                         display: 'block',
                         userSelect: 'none',
-                        transition: 'width 0.2s ease',
+                        transition: 'transform 0.3s ease',
+                        transform: zoomLevel > 1 ? `scale(${zoomLevel})` : 'scale(1)',
+                        transformOrigin: 'center center',
                       }}
                     />
-                    <div className="lb-zoom-controls" onClick={e => e.stopPropagation()}>
-                      <button className="lb-zoom-btn" onClick={() => setZoomLevel(z => Math.min(4, +(z + 0.25).toFixed(2)))} aria-label="Zoom In" title="Zoom In">+</button>
-                      <span className="lb-zoom-level">{Math.round(zoomLevel * 100)}%</span>
-                      <button className="lb-zoom-btn" onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom Out" title="Zoom Out">−</button>
-                      {zoomLevel !== 1 && (
-                        <button className="lb-zoom-btn lb-zoom-reset" onClick={() => setZoomLevel(1)} aria-label="Reset Zoom" title="Reset">↺</button>
-                      )}
-                    </div>
                   </div>
                   <p className="svc-lightbox-caption">{zoomPhoto.title}</p>
                   {zoomPhoto.caption && (
                     <p style={{ color: 'var(--text-muted, #9ca3af)', fontSize: '0.82rem', marginTop: 2, textAlign: 'center' }}>{zoomPhoto.caption}</p>
                   )}
-                  <p style={{ color: 'var(--gold, #c9a96e)', fontSize: '0.72rem', marginTop: 6 }}>Scroll to zoom · +/− keys · Esc to close</p>
+                  <p style={{ color: 'var(--gold, #c9a96e)', fontSize: '0.72rem', marginTop: 6 }}>Click image to zoom · Esc to close</p>
                 </motion.div>
               </motion.div>
             )}

@@ -746,10 +746,11 @@ export default function Gallery() {
                 maxHeight: '90vh',
               }}
             >
-              {/* Zoomable Image Wrapper */}
+              {/* Zoomable Image Wrapper — click to toggle zoom */}
               <div
                 className="lb-zoom-wrapper"
                 onWheel={handleLightboxWheel}
+                onClick={() => setZoomLevel(z => z > 1 ? 1 : 2)}
                 style={{
                   borderRadius: 12,
                   overflow: zoomLevel > 1 ? 'auto' : 'hidden',
@@ -762,7 +763,7 @@ export default function Gallery() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   position: 'relative',
-                  cursor: zoomLevel > 1 ? 'grab' : 'zoom-in',
+                  cursor: zoomLevel > 1 ? 'zoom-out' : 'zoom-in',
                 }}
               >
                 <img
@@ -770,48 +771,16 @@ export default function Gallery() {
                   alt={currentItem.title}
                   draggable={false}
                   style={{
-                    maxWidth: zoomLevel <= 1 ? '100%' : 'none',
-                    maxHeight: zoomLevel <= 1 ? '68vh' : 'none',
-                    width: zoomLevel > 1 ? `${zoomLevel * 100}%` : undefined,
+                    maxWidth: '100%',
+                    maxHeight: '68vh',
                     objectFit: 'contain',
                     display: 'block',
-                    transition: 'transform 0.2s ease, width 0.2s ease',
-                    transform: `scale(${zoomLevel <= 1 ? zoomLevel : 1})`,
+                    transition: 'transform 0.3s ease',
+                    transform: zoomLevel > 1 ? `scale(${zoomLevel})` : 'scale(1)',
                     transformOrigin: 'center center',
                     userSelect: 'none',
                   }}
                 />
-
-                {/* Subtle zoom controls — fade in on hover */}
-                <div className="lb-zoom-controls" onClick={e => e.stopPropagation()}>
-                  <button
-                    className="lb-zoom-btn"
-                    onClick={() => setZoomLevel(z => Math.min(4, +(z + 0.25).toFixed(2)))}
-                    title="Zoom In (+)"
-                    aria-label="Zoom In"
-                  >
-                    +
-                  </button>
-                  <span className="lb-zoom-level">{Math.round(zoomLevel * 100)}%</span>
-                  <button
-                    className="lb-zoom-btn"
-                    onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.25).toFixed(2)))}
-                    title="Zoom Out (-)"
-                    aria-label="Zoom Out"
-                  >
-                    −
-                  </button>
-                  {zoomLevel !== 1 && (
-                    <button
-                      className="lb-zoom-btn lb-zoom-reset"
-                      onClick={() => setZoomLevel(1)}
-                      title="Reset Zoom (0)"
-                      aria-label="Reset Zoom"
-                    >
-                      ↺
-                    </button>
-                  )}
-                </div>
               </div>
 
               {/* Caption and Inquire Button */}

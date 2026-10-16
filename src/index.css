@@ -530,61 +530,6 @@ textarea:focus-visible {
 .lb-zoom-wrapper {
   position: relative;
 }
-.lb-zoom-controls {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(10, 10, 10, 0.75);
-  border: 1px solid rgba(201, 169, 110, 0.35);
-  border-radius: 24px;
-  padding: 5px 10px;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  z-index: 10;
-  backdrop-filter: blur(4px);
-}
-.lb-zoom-wrapper:hover .lb-zoom-controls,
-.lb-zoom-wrapper:focus-within .lb-zoom-controls {
-  opacity: 1;
-}
-@media (hover: none) {
-  /* Always show zoom controls on touch devices */
-  .lb-zoom-controls { opacity: 1; }
-}
-.lb-zoom-btn {
-  background: none;
-  border: none;
-  color: var(--gold);
-  font-size: 1.1rem;
-  font-weight: 700;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-radius: 50%;
-  transition: background 0.2s;
-  line-height: 1;
-}
-.lb-zoom-btn:hover {
-  background: rgba(201, 169, 110, 0.18);
-}
-.lb-zoom-level {
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 0.72rem;
-  font-weight: 600;
-  min-width: 36px;
-  text-align: center;
-  letter-spacing: 0.5px;
-}
-.lb-zoom-reset {
-  font-size: 1rem;
-  color: rgba(255, 255, 255, 0.6);
-}
 
 /* ========== SERVICES SECTION PHOTO LIGHTBOX ========== */
 .svc-lightbox-overlay {
@@ -649,37 +594,4 @@ textarea:focus-visible {
   line-height: 1;
 }
 .svc-lightbox-close:hover { background: rgba(255, 255, 255, 0.18); }
-.svc-photo-thumb {
-  cursor: zoom-in;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-.svc-photo-thumb:hover {
-  transform: scale(1.04);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-}
-.svc-photo-thumb img {
-  transition: filter 0.25s ease;
-}
-.svc-photo-thumb:hover img {
-  filter: brightness(1.1);
-}
-/* Zoom icon overlay on thumb hover */
-.svc-photo-thumb-inner {
-  position: relative;
-}
-.svc-photo-thumb-inner::after {
-  content: '🔍';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.4rem;
-  background: rgba(0, 0, 0, 0.4);
-  opacity: 0;
-  transition: opacity 0.2s;
-  border-radius: 8px 8px 0 0;
-}
-.svc-photo-thumb:hover .svc-photo-thumb-inner::after {
-  opacity: 1;
-}
+
