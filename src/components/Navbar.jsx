@@ -13,7 +13,6 @@ const links = [
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
-  const [open, setOpen] = useState(false)
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('theme')
     if (saved && ['dark', 'skyblue', 'grey', 'light'].includes(saved)) {
@@ -33,84 +32,36 @@ export default function Navbar() {
     localStorage.setItem('theme', theme)
   }, [theme])
 
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape' && open) setOpen(false)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    if (open) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = ''
-    }
-  }, [open])
-
   const handleSelectTheme = (newTheme) => {
     setTheme(newTheme)
   }
 
   return (
-    <>
-      <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
-        <Link to="/" className="nav-logo">
-          <span className="logo-main">REYANSH</span>
-          <span className="logo-sub">STUDIO</span>
-        </Link>
-        <div className="nav-links">
-          {links.map(l => (
-            <NavLink key={l.to} to={l.to} end={l.to === '/'}>
-              {l.label}
-            </NavLink>
-          ))}
-        </div>
-        <div className="nav-actions">
-          <ThemeSelector
-            currentTheme={theme}
-            onSelectTheme={handleSelectTheme}
-            variant="dropdown"
-          />
-          <Link to="/contact" className="nav-cta">Get a Quote</Link>
-        </div>
-        <div className="nav-mobile-actions">
-          <button
-            className={`hamburger ${open ? 'open' : ''}`}
-            onClick={() => setOpen(!open)}
-            aria-label="Toggle navigation menu"
-            aria-expanded={open}
-            type="button"
-          >
-            <span /><span /><span />
-          </button>
-        </div>
-      </nav>
-      <div className={`mobile-menu ${open ? 'open' : ''}`}>
+    <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
+      {/* Logo — always left */}
+      <Link to="/" className="nav-logo">
+        <span className="logo-main">REYANSH</span>
+        <span className="logo-sub">STUDIO</span>
+      </Link>
+
+      {/* Nav links — always horizontal, never wraps */}
+      <div className="nav-links">
         {links.map(l => (
-          <NavLink key={l.to} to={l.to} end={l.to === '/'} onClick={() => setOpen(false)}>
+          <NavLink key={l.to} to={l.to} end={l.to === '/'}>
             {l.label}
           </NavLink>
         ))}
+      </div>
+
+      {/* Right actions — hidden on small screens to save space */}
+      <div className="nav-actions">
         <ThemeSelector
           currentTheme={theme}
-          onSelectTheme={(t) => {
-            handleSelectTheme(t)
-            setOpen(false)
-          }}
-          variant="inline"
+          onSelectTheme={handleSelectTheme}
+          variant="dropdown"
         />
-        <Link
-          to="/contact"
-          className="nav-cta"
-          onClick={() => setOpen(false)}
-          style={{ textAlign: 'center', marginTop: 8 }}
-        >
-          Get a Quote
-        </Link>
+        <Link to="/contact" className="nav-cta">Get a Quote</Link>
       </div>
-    </>
+    </nav>
   )
 }
-
