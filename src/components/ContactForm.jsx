@@ -505,12 +505,6 @@ export default function ContactForm() {
               )}
             </button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: '0.82rem' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: serverOnline ? '#22c55e' : 'var(--text-muted)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: serverOnline ? '#22c55e' : '#ef4444', display: 'inline-block' }} />
-                {serverOnline ? 'Backend Online' : 'Connecting to Server...'}
-              </span>
-            </div>
           </div>
         </motion.form>
       )}
