@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, CheckCircle, AlertCircle, Loader2, MessageSquare, Check, Server, Camera, X } from 'lucide-react'
+import { Send, CheckCircle, AlertCircle, Loader2, MessageSquare, Check, Camera, X } from 'lucide-react'
 import { apiUrl } from '../config/api'
+import { projectTitles } from '../data/projectsData'
 
 const SERVICES = [
   'Home Interior',
@@ -15,13 +17,18 @@ const SERVICES = [
   'Other / Complete Renovation',
 ]
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export default function ContactForm() {
+  const location = useLocation()
   const [form, setForm] = useState({
     name: '',
     email: '',
     phone: '',
     service: '',
+    project: '',
     message: '',
+    website: '',
   })
   const [attachedPhoto, setAttachedPhoto] = useState(null) // { name, dataUrl }
   const [loading, setLoading] = useState(false)
@@ -40,6 +47,25 @@ export default function ContactForm() {
       .then(() => setServerOnline(true))
       .catch(() => setServerOnline(false));
   }, []);
+
+  useEffect(() => {
+    let prefilled = location.state?.projectName || ''
+    if (!prefilled) {
+      try {
+        prefilled = sessionStorage.getItem('reyansh_enquiry_project') || ''
+        if (prefilled) sessionStorage.removeItem('reyansh_enquiry_project')
+      } catch {
+        /* ignore */
+      }
+    }
+    if (prefilled) {
+      setForm((prev) => ({
+        ...prev,
+        project: prefilled,
+        message: prev.message || `I would like to enquire about "${prefilled}". Please share details for this design.`,
+      }))
+    }
+  }, [location.state])
 
   const handle = e => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -67,6 +93,24 @@ export default function ContactForm() {
     e.preventDefault()
     if (loading) return // Prevent duplicate submissions
 
+    const name = form.name.trim()
+    const email = form.email.trim()
+    const message = form.message.trim()
+    const project = form.project.trim()
+
+    if (name.length < 2) {
+      setErrorMessage('Please provide your full name (at least 2 characters).')
+      return
+    }
+    if (!EMAIL_PATTERN.test(email)) {
+      setErrorMessage('Please provide a valid email address.')
+      return
+    }
+    if (message.length < 5) {
+      setErrorMessage('Please enter your enquiry message (at least 5 characters).')
+      return
+    }
+
     setLoading(true)
     setErrorMessage('')
     setEmailNotice('')
@@ -76,7 +120,14 @@ export default function ContactForm() {
 
     try {
       const payload = {
-        ...form,
+        name,
+        email,
+        phone: form.phone.trim(),
+        service: form.service || (project ? 'Project Enquiry' : 'General Furniture Enquiry'),
+        product_title: project,
+        project,
+        message,
+        website: form.website,
         photo_data: attachedPhoto?.dataUrl || '',
         photo_filename: attachedPhoto?.name || '',
       }
@@ -105,7 +156,7 @@ export default function ContactForm() {
         } else {
           setEmailNotice('')
         }
-        setForm({ name: '', email: '', phone: '', service: '', message: '' })
+        setForm({ name: '', email: '', phone: '', service: '', project: '', message: '', website: '' })
         setAttachedPhoto(null)
       } else {
         const errorText = (data && data.message)
@@ -273,7 +324,7 @@ export default function ContactForm() {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="cf-phone">Phone / WhatsApp *</label>
+              <label htmlFor="cf-phone">Phone / WhatsApp <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(Optional)</span></label>
               <input
                 id="cf-phone"
                 name="phone"
@@ -281,7 +332,6 @@ export default function ContactForm() {
                 value={form.phone}
                 onChange={handle}
                 placeholder=""
-                required
                 disabled={loading}
               />
             </div>
@@ -302,6 +352,36 @@ export default function ContactForm() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="cf-project">Selected Project</label>
+            <select
+              id="cf-project"
+              name="project"
+              value={form.project}
+              onChange={handle}
+              disabled={loading}
+            >
+              <option value="">Select a project (optional)</option>
+              {projectTitles.map((title) => (
+                <option key={title} value={title}>
+                  {title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group honeypot-field" aria-hidden="true">
+            <label htmlFor="cf-website">Website</label>
+            <input
+              id="cf-website"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              value={form.website}
+              onChange={handle}
+            />
           </div>
 
           <div className="form-group">

@@ -37,6 +37,18 @@ export const apiUrl = (endpoint) => {
   return `${API_BASE_URL}${cleanEndpoint}`
 }
 
+/** Authorization headers for admin-only enquiry APIs. */
+export const authHeaders = (extra = {}) => {
+  try {
+    const raw = localStorage.getItem('reyansh_admin_auth')
+    const token = raw ? JSON.parse(raw)?.token : ''
+    if (token) return { ...extra, Authorization: `Bearer ${token}` }
+  } catch {
+    /* ignore */
+  }
+  return extra
+}
+
 export default {
   API_BASE_URL,
   apiUrl,

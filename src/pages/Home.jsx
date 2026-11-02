@@ -6,20 +6,11 @@ import HeroSection from '../components/HeroSection'
 import ServiceCard from '../components/ServiceCard'
 import ServiceDetailModal from '../components/ServiceDetailModal'
 import ProjectCard from '../components/ProjectCard'
+import ProjectDetailModal from '../components/ProjectDetailModal'
 import TestimonialSlider from '../components/TestimonialSlider'
 import CTASection from '../components/CTASection'
 import { servicesData } from '../data/servicesData'
-import imgLiving from '../assets/project-living.png'
-import imgFlutedBlush from '../assets/gallery-fluted-blush-sofa.jpg'
-import imgSofaCumBed from '../assets/gallery-sofacumbed-rose.jpg'
-import imgTealTub from '../assets/gallery-teal-tub-armchair.jpg'
-
-const featured = [
-  { image: imgFlutedBlush, title: 'Curved Fluted Channel Sofa', category: 'Custom Sofa' },
-  { image: imgSofaCumBed, title: 'Convertible Sofa-cum-Bed & Ottoman', category: 'Custom Sofa' },
-  { image: imgTealTub, title: 'Peacock Velvet Barrel Tub Chair', category: 'Custom Sofa' },
-  { image: imgLiving, title: 'The Royal Living Room', category: 'Residential' },
-]
+import { featuredProjects } from '../data/projectsData'
 
 const stats = [
   { value: 500, suffix: '+', label: 'Projects Completed' },
@@ -48,6 +39,7 @@ function Stats() {
 
 export default function Home() {
   const [selectedService, setSelectedService] = useState(null)
+  const [selectedProject, setSelectedProject] = useState(null)
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
@@ -85,7 +77,17 @@ export default function Home() {
             <p>A glimpse into our latest interior transformations and sofa creations</p>
           </div>
           <div className="projects-grid">
-            {featured.map((p, i) => <ProjectCard key={i} index={i} {...p} />)}
+            {featuredProjects.map((p, i) => (
+              <ProjectCard
+                key={p.title}
+                index={i}
+                image={p.image}
+                title={p.title}
+                category={p.category}
+                description={p.description}
+                onClick={() => setSelectedProject(p)}
+              />
+            ))}
           </div>
         </div>
       </section>
@@ -98,6 +100,11 @@ export default function Home() {
         service={selectedService}
         isOpen={Boolean(selectedService)}
         onClose={() => setSelectedService(null)}
+      />
+      <ProjectDetailModal
+        project={selectedProject}
+        isOpen={Boolean(selectedProject)}
+        onClose={() => setSelectedProject(null)}
       />
     </motion.div>
   )

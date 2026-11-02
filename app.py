@@ -5,6 +5,8 @@ import json
 import html
 import time
 import smtplib
+import urllib.request
+import urllib.error
 from datetime import datetime
 import base64
 from email.mime.multipart import MIMEMultipart
@@ -440,6 +442,182 @@ Direct Reply: Click reply in your mail client to reply to {email}
         }
 
 
+FALLBACK_AI_PARAGRAPH = (
+    "We have noted your enquiry and a designer from our studio will review your requirements personally. "
+    "For questions about pricing, availability, delivery timelines, warranties, or customisation costs, "
+    "our team will confirm the accurate details with you — we do not quote those figures automatically."
+)
+
+
+def generate_ai_reply(name, project_name, message):
+    """Generate a short customer reply. Returns (text_or_none, status)."""
+    api_key = (os.getenv("AI_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        return None, "unconfigured"
+
+    model = (os.getenv("AI_MODEL") or "gpt-4o-mini").strip()
+    base_url = (os.getenv("AI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+
+    system_prompt = (
+        "You write brief, warm acknowledgement paragraphs for Reyanah Studio, "
+        "a furniture and interior design studio in Pune. "
+        "Use only verified facts: the studio offers custom furniture and interior design, "
+        "and a human team will follow up. "
+        "Never invent prices, discounts, delivery dates, warranties, bookings, refunds, or policies. "
+        "If the customer asks about price, availability, timelines, warranties, or customisation costs, "
+        "say the studio team will confirm those details. "
+        "Do not mention AI, prompts, or internal systems. Keep to 2-4 sentences."
+    )
+    user_prompt = (
+        f"Customer name: {name}\n"
+        f"Selected project: {project_name or 'General enquiry'}\n"
+        f"Customer message:\n{message}"
+    )
+    payload = {
+        "model": model,
+        "temperature": 0.5,
+        "max_tokens": 220,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+    req = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+        if not text:
+            return None, "empty"
+        return text, "ok"
+    except Exception as err:
+        print(f"[AI] Reply generation unavailable: {err}", file=sys.stderr)
+        return None, "error"
+
+
+def build_customer_acknowledgement(name, project_name, ai_paragraph):
+    """Assemble the customer email from the studio template."""
+    safe_name = name or "Valued Client"
+    project_label = project_name or "your furniture and interior design enquiry"
+    body = f"""Dear {safe_name},
+
+Thank you for contacting Reyanah Studio and for your interest in our furniture and interior design services.
+
+We have successfully received your enquiry regarding {project_label}. We truly appreciate your interest in our designs and customized furniture solutions.
+
+{ai_paragraph}
+
+Our team will review your enquiry and get back to you as soon as possible. If additional information is required, we will contact you using the details you provided.
+
+Thank you for considering Reyanah Studio for your space. We look forward to assisting you in creating something beautiful.
+
+Warm regards,
+Team Reyanah Studio
+Furniture & Interior Design
+"""
+    html_body = f"""
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#14151a;color:#f3f4f6;border:1px solid #2a2a32;border-radius:12px;overflow:hidden;">
+      <div style="padding:28px 24px;border-bottom:2px solid #c9a96e;background:linear-gradient(135deg,#1b1710,#262014);">
+        <h1 style="margin:0;color:#c9a96e;letter-spacing:2px;font-size:20px;">REYANAH STUDIO</h1>
+        <p style="margin:8px 0 0;color:#d1d5db;font-size:13px;">Furniture &amp; Interior Design</p>
+      </div>
+      <div style="padding:28px 24px;line-height:1.7;font-size:15px;color:#e5e7eb;">
+        {html.escape(body).replace(chr(10), '<br />')}
+      </div>
+    </div>
+    """
+    return body, html_body
+
+
+def send_customer_acknowledgement(name, customer_email, project_name, message):
+    """Send one acknowledgement to the visitor. Returns status dict."""
+    cfg = get_smtp_config()
+    if not cfg["user"] or not cfg["password"]:
+        return {"sent": False, "status": "skipped", "mode": "unconfigured"}
+
+    ai_text, ai_status = generate_ai_reply(name, project_name, message)
+    mode = "ai" if ai_text else "fallback"
+    paragraph = ai_text or FALLBACK_AI_PARAGRAPH
+    text_body, html_body = build_customer_acknowledgement(name, project_name, paragraph)
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Thank You for Contacting Reyanah Studio"
+    msg["From"] = f"Reyanah Studio <{cfg['from_email']}>"
+    msg["To"] = sanitize_header(customer_email)
+    msg["Date"] = formatdate(localtime=True)
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    try:
+        if cfg["port"] == 465:
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=15) as server:
+                server.login(cfg["user"], cfg["password"])
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(cfg["host"], cfg["port"], timeout=15) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(cfg["user"], cfg["password"])
+                server.send_message(msg)
+        return {"sent": True, "status": "sent", "mode": mode, "aiStatus": ai_status}
+    except Exception as err:
+        print(f"[EMAIL] Customer acknowledgement failed: {err}", file=sys.stderr)
+        return {"sent": False, "status": "failed", "mode": mode, "error": "provider_error"}
+
+
+def find_recent_duplicate_lead(email, message, product_title, window_ms=10 * 60 * 1000):
+    leads = get_consultations()
+    now = time.time() * 1000
+    clean_email = (email or "").strip().lower()
+    clean_message = (message or "").strip().lower()
+    clean_title = (product_title or "").strip().lower()
+    for lead in leads:
+        try:
+            created = datetime.fromisoformat(lead.get("createdAt", "").replace("Z", "+00:00"))
+            lead_ms = created.timestamp() * 1000
+        except Exception:
+            continue
+        if now - lead_ms > window_ms:
+            continue
+        if (lead.get("email") or "").strip().lower() != clean_email:
+            continue
+        lead_message = (lead.get("message") or "").strip().lower()
+        lead_title = (lead.get("product_title") or lead.get("project") or "").strip().lower()
+        content_matches = (clean_message and lead_message == clean_message) or (
+            clean_title and lead_title == clean_title
+        )
+        if content_matches:
+            return lead
+    return None
+
+
+def persist_lead_update(lead_id, updates):
+    leads = get_consultations()
+    for lead in leads:
+        if lead.get("id") == lead_id:
+            lead.update(updates)
+            save_consultations(leads)
+            return lead
+    return None
+
+
+def require_admin_token():
+    auth_header = request.headers.get("Authorization", "")
+    token = request.args.get("token") or (
+        auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else ""
+    )
+    return bool(token and token.startswith("adm_"))
+
+
 # ========================================================
 # API ENDPOINTS
 # ========================================================
@@ -539,7 +717,7 @@ def submit_contact():
     data = request.get_json(silent=True) or request.form.to_dict() or {}
 
     # Honeypot spam trap
-    if data.get("_gotcha") or data.get("_hp_trap") or data.get("honeypot"):
+    if data.get("_gotcha") or data.get("_hp_trap") or data.get("honeypot") or data.get("website"):
         return jsonify({"success": False, "message": "Invalid submission."}), 400
 
     name = str(data.get("name", "")).strip()
@@ -551,7 +729,9 @@ def submit_contact():
     # Optional photo fields for design enquiry
     photo_filename = str(data.get("photo_filename") or data.get("photoFilename") or "").strip()
     photo_data = str(data.get("photo_data") or data.get("photoData") or "").strip()
-    product_title = str(data.get("product_title") or data.get("productTitle") or "").strip()
+    product_title = str(
+        data.get("product_title") or data.get("productTitle") or data.get("project") or ""
+    ).strip()
     photo_url = str(data.get("photo_url") or data.get("photoUrl") or "").strip()
 
     # 3. Input validation
@@ -576,6 +756,21 @@ def submit_contact():
     # Format timestamp
     formatted_date = datetime.now().strftime("%A, %d %B %Y at %I:%M %p")
 
+    existing_lead = find_recent_duplicate_lead(email, message, product_title)
+    if existing_lead:
+        print(f"[ENQUIRY] Duplicate submission prevented for lead {existing_lead.get('id')}")
+        return jsonify({
+            "success": True,
+            "saved": True,
+            "duplicatePrevented": True,
+            "id": existing_lead.get("id"),
+            "emailSent": bool(existing_lead.get("emailSent")),
+            "autoReplySent": bool(existing_lead.get("autoReplySent")),
+            "message": "Your enquiry is already received. Our team will contact you shortly.",
+            "notice": None if existing_lead.get("emailSent") else
+                "Your enquiry is saved. Email notification may still be pending.",
+        }), 200
+
     # 4. Save enquiry into persistent local database so it is NEVER lost
     lead_id = f"lead_{int(time.time() * 1000)}"
     new_lead = {
@@ -584,6 +779,7 @@ def submit_contact():
         "email": email,
         "phone": phone,
         "service": service,
+        "project": product_title,
         "message": message,
         "product_title": product_title,
         "photo_filename": photo_filename,
@@ -593,23 +789,18 @@ def submit_contact():
         "formattedDate": formatted_date,
         "status": "new",
         "emailSent": False,
-        "client_ip": client_ip,
+        "notificationEmailStatus": "pending",
+        "autoReplySent": False,
+        "autoReplyStatus": "pending",
     }
 
     leads = get_consultations()
     leads.insert(0, new_lead)
     save_consultations(leads)
 
-    print(f"\n[ENQUIRY] New Furniture Enquiry Received:")
-    print(f"   Name    : {name}")
-    print(f"   Email   : {email}")
-    print(f"   Phone   : {phone or 'N/A'}")
-    print(f"   Service : {service}")
+    print(f"\n[ENQUIRY] New furniture enquiry saved: {lead_id} ({service})")
     if product_title:
         print(f"   Design  : {product_title}")
-    if photo_filename:
-        print(f"   Photo   : {photo_filename}")
-    print(f"   Message : {message[:100]}...\n")
 
     # 5. Send notification email via SMTP with attached design photo
     email_result = send_enquiry_email(
@@ -625,30 +816,43 @@ def submit_contact():
         photo_url=photo_url,
     )
 
-    if email_result.get("success"):
-        new_lead["emailSent"] = True
-        save_consultations(leads)
-        return jsonify({
-            "success": True,
-            "message": "Thank you! Your enquiry has been received and our team will contact you shortly.",
-            "id": lead_id,
-            "has_photo": bool(photo_filename or photo_data),
-        }), 200
-    else:
-        # Crucial requirement: Do NOT falsely report success if email sending failed
-        error_msg = email_result.get("error", "Failed to send email notification.")
-        status_code = email_result.get("status_code", 500)
-        return jsonify({
-            "success": False,
-            "message": error_msg,
-            "id": lead_id,
-            "saved_locally": True,
-        }), status_code
+    notification_sent = bool(email_result.get("success"))
+    persist_lead_update(lead_id, {
+        "emailSent": notification_sent,
+        "notificationEmailStatus": "sent" if notification_sent else "failed",
+        "emailNote": None if notification_sent else (email_result.get("error") or "notification_failed"),
+    })
+
+    auto_reply = {"sent": False, "status": "skipped", "mode": None}
+    if notification_sent:
+        auto_reply = send_customer_acknowledgement(name, email, product_title, message)
+        persist_lead_update(lead_id, {
+            "autoReplySent": bool(auto_reply.get("sent")),
+            "autoReplyStatus": auto_reply.get("status"),
+            "autoReplyMode": auto_reply.get("mode"),
+        })
+
+    saved = True
+    return jsonify({
+        "success": True,
+        "saved": saved,
+        "message": "Thank you! Your enquiry has been received and our team will contact you shortly."
+        if notification_sent else
+        "Thank you! Your enquiry has been saved. Our team can view it in the studio portal.",
+        "id": lead_id,
+        "emailSent": notification_sent,
+        "autoReplySent": bool(auto_reply.get("sent")),
+        "has_photo": bool(photo_filename or photo_data),
+        "notice": None if notification_sent else
+            "Email notification to the studio may be delayed, but your enquiry is logged safely.",
+    }), 200
 
 
 @app.route("/api/consultations", methods=["GET"])
 def get_all_consultations():
-    """Admin endpoint to view received enquiries."""
+    """Admin endpoint to view received enquiries. Not publicly accessible."""
+    if not require_admin_token():
+        return jsonify({"success": False, "message": "Administrator authentication required."}), 401
     status_filter = request.args.get("status")
     leads = get_consultations()
     if status_filter and status_filter != "all":
@@ -663,6 +867,8 @@ def get_all_consultations():
 @app.route("/api/consultations/<lead_id>", methods=["PATCH"])
 def update_consultation_status(lead_id):
     """Update enquiry status (new, contacted, completed)."""
+    if not require_admin_token():
+        return jsonify({"success": False, "message": "Administrator authentication required."}), 401
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
     notes = data.get("notes")
@@ -685,6 +891,8 @@ def update_consultation_status(lead_id):
 @app.route("/api/consultations/<lead_id>", methods=["DELETE"])
 def delete_consultation(lead_id):
     """Delete an enquiry."""
+    if not require_admin_token():
+        return jsonify({"success": False, "message": "Administrator authentication required."}), 401
     leads = get_consultations()
     filtered = [l for l in leads if l.get("id") != lead_id]
     if len(filtered) == len(leads):

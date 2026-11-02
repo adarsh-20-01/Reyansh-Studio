@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Server,
   Mail,
   Phone,
   MessageSquare,
-  CheckCircle,
-  Clock,
   Trash2,
   RefreshCw,
   PlusCircle,
@@ -21,7 +18,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { apiUrl } from '../config/api'
+import { apiUrl, authHeaders } from '../config/api'
 import { useAuth } from '../context/AuthContext'
 import AdminLogin from '../components/AdminLogin'
 
@@ -30,30 +27,18 @@ export default function Admin() {
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [backendHealth, setBackendHealth] = useState(null)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [actionMsg, setActionMsg] = useState('')
+  const [testRunning, setTestRunning] = useState(false)
 
-  const fetchHealth = async () => {
-    try {
-      const res = await fetch(apiUrl('/api/health'))
-      if (res.ok) {
-        const data = await res.json()
-        setBackendHealth(data)
-      } else {
-        setBackendHealth(null)
-      }
-    } catch {
-      setBackendHealth(null)
-    }
-  }
+
 
   const fetchLeads = async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(apiUrl('/api/consultations'))
+      const res = await fetch(apiUrl('/api/consultations'), { headers: authHeaders() })
       if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to load leads`)
       const data = await res.json()
       setLeads(data.consultations || [])
@@ -66,7 +51,6 @@ export default function Admin() {
 
   useEffect(() => {
     if (isAdmin) {
-      fetchHealth()
       fetchLeads()
     }
   }, [isAdmin])
@@ -75,7 +59,7 @@ export default function Admin() {
     try {
       const res = await fetch(apiUrl(`/api/consultations/${id}`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ status: newStatus }),
       })
       if (res.ok) {
@@ -92,6 +76,7 @@ export default function Admin() {
     try {
       const res = await fetch(apiUrl(`/api/consultations/${id}`), {
         method: 'DELETE',
+        headers: authHeaders(),
       })
       if (res.ok) {
         setLeads(leads.filter(l => l.id !== id))
@@ -103,6 +88,8 @@ export default function Admin() {
   }
 
   const sendTestLead = async () => {
+    if (testRunning) return
+    setTestRunning(true)
     const testNames = ['Rajesh Patel', 'Ananya Deshmukh', 'Aditya Verma', 'Sneha Kulkarni']
     const testServices = ['Home Interior', 'Custom Sofa', 'Kitchen Cabinet', 'Wardrobes']
     const randomName = testNames[Math.floor(Math.random() * testNames.length)]
@@ -124,10 +111,11 @@ export default function Admin() {
       if (res.ok) {
         showNotification(`✨ Test lead submitted and stored successfully!`)
         fetchLeads()
-        fetchHealth()
       }
     } catch (err) {
       alert('Failed to create test lead: ' + err.message)
+    } finally {
+      setTestRunning(false)
     }
   }
 
@@ -158,7 +146,7 @@ export default function Admin() {
 
   // If not logged in as Admin, show private Admin Login screen
   if (!isAdmin) {
-    return <AdminLogin onLoginSuccess={() => { fetchHealth(); fetchLeads(); }} />
+    return <AdminLogin onLoginSuccess={() => { fetchLeads(); }} />
   }
 
   return (
@@ -233,7 +221,6 @@ export default function Admin() {
 
             <button
               onClick={() => {
-                fetchHealth()
                 fetchLeads()
               }}
               className="btn-outline"
@@ -243,10 +230,11 @@ export default function Admin() {
             </button>
             <button
               onClick={sendTestLead}
+              disabled={testRunning}
               className="btn-gold"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', fontSize: '0.85rem' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', fontSize: '0.85rem', opacity: testRunning ? 0.6 : 1, cursor: testRunning ? 'not-allowed' : 'pointer' }}
             >
-              <PlusCircle size={15} /> Test Pipeline
+              <PlusCircle size={15} /> {testRunning ? 'Running...' : 'Test Pipeline'}
             </button>
             <button
               onClick={logout}
@@ -268,71 +256,7 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Backend Connectivity Status Card */}
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-gold)',
-            borderRadius: '12px',
-            padding: '18px 24px',
-            marginBottom: 28,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 16,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: '50%',
-                background: backendHealth ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                color: backendHealth ? '#22c55e' : '#ef4444',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Server size={22} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: 9,
-                    height: 9,
-                    borderRadius: '50%',
-                    background: backendHealth ? '#22c55e' : '#ef4444',
-                    boxShadow: backendHealth ? '0 0 8px #22c55e' : 'none',
-                  }}
-                />
-                <strong style={{ color: 'var(--text-light)', fontSize: '1rem' }}>
-                  {backendHealth ? 'Backend Server Online (Express)' : 'Backend Server Offline'}
-                </strong>
-              </div>
-              <p style={{ margin: '4px 0 0', color: 'var(--text-muted-light)', fontSize: '0.85rem', wordBreak: 'break-word' }}>
-                {backendHealth
-                  ? `Active on http://localhost:5000 • Leads stored in data/consultations.json • Email: ${backendHealth.receiver}`
-                  : 'Cannot reach backend at /api. Make sure "npm run dev" or "node server.js" is active.'}
-              </p>
-            </div>
-          </div>
 
-          {backendHealth && (
-            <div style={{ display: 'flex', gap: 16, fontSize: '0.85rem', color: 'var(--text-muted-light)' }}>
-              <div>
-                Uptime: <strong style={{ color: 'var(--text-light)' }}>{backendHealth.uptime}s</strong>
-              </div>
-              <div>
-                Storage: <strong style={{ color: 'var(--gold)' }}>JSON Database</strong>
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* Action toast notification */}
         {actionMsg && (
@@ -485,8 +409,13 @@ export default function Admin() {
             <p style={{ color: 'var(--text-muted-light)', fontSize: '0.9rem', maxWidth: 440, margin: '0 auto 20px' }}>
               {search ? 'No inquiries matched your search criteria.' : 'No consultation requests in this category yet.'}
             </p>
-            <button onClick={sendTestLead} className="btn-gold" style={{ padding: '10px 22px', fontSize: '0.85rem' }}>
-              Create a Test Lead
+            <button
+              onClick={sendTestLead}
+              disabled={testRunning}
+              className="btn-gold"
+              style={{ padding: '10px 22px', fontSize: '0.85rem', opacity: testRunning ? 0.6 : 1, cursor: testRunning ? 'not-allowed' : 'pointer' }}
+            >
+              {testRunning ? 'Running...' : 'Create a Test Lead'}
             </button>
           </div>
         ) : (

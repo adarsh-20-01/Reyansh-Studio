@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronLeft, ChevronRight, ZoomIn, MessageSquare, Sparkles, Filter, Mail, Camera, Plus, Trash2, Upload, Shield } from 'lucide-react'
+import { X, ZoomIn, MessageSquare, Sparkles, Filter, Mail, Camera, Plus, Trash2, Upload, Shield, Eye } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import ProjectDetailModal from '../components/ProjectDetailModal'
 import PhotoEnquiryModal from '../components/PhotoEnquiryModal'
 import AddPhotoModal from '../components/AddPhotoModal'
 import { useAuth } from '../context/AuthContext'
 import { apiUrl } from '../config/api'
+import { allProjects } from '../data/projectsData'
 
 // Core assets
 import imgLiving from '../assets/project-living.png'
@@ -36,43 +38,43 @@ const galleryData = [
     image: imgSofaCumBed,
     filename: 'gallery-sofacumbed-rose.jpg',
     title: 'Convertible Sofa-cum-Bed & Ottoman',
-    category: 'Custom Sofas',
+    category: 'Custom Sofa',
     tag: 'Workshop & Living Suite',
-    desc: 'Handcrafted dusty rose 3-seater pull-out sofa bed with high-density comfort foam, workshop-tested framing, and matching glass-top fluted ottoman.',
+    desc: 'A versatile furniture design combining comfortable seating with a convertible sleeping arrangement and a matching ottoman. Ideal for spaces that need both functionality and style.',
   },
   {
     id: 2,
     image: imgFlutedBlush,
     filename: 'gallery-fluted-blush-sofa.jpg',
     title: 'Curved Fluted Channel Sofa',
-    category: 'Custom Sofas',
+    category: 'Custom Sofa',
     tag: 'Signature Living',
-    desc: 'Luxury blush pink velvet curved sofa with vertical channel tufting and gold brass ball feet. Designed for modern luxury interiors.',
+    desc: 'A contemporary curved sofa featuring elegant vertical channel detailing, a soft upholstered finish, and a rounded silhouette. Its modern design makes it suitable for stylish living rooms and premium interior spaces.',
   },
   {
     id: 3,
     image: imgTealRibbed,
     filename: 'gallery-teal-ribbed-sofa.jpg',
     title: 'Signature Teal Ribbed Luxury Sofa',
-    category: 'Custom Sofas',
+    category: 'Custom Sofa',
     tag: 'Luxury Collection',
-    desc: 'Deep peacock teal sofa with vertical channel quilting, plush cushion filling, and polished brass hairpin legs.',
+    desc: 'A bold statement sofa with rich teal upholstery and a distinctive ribbed texture. Its clean lines and generous proportions make it a centerpiece for any modern living space.',
   },
   {
     id: 4,
     image: imgTealTub,
     filename: 'gallery-teal-tub-armchair.jpg',
-    title: 'Peacock Velvet Barrel Tub Armchair',
-    category: 'Accent Chairs',
+    title: 'Peacock Velvet Barrel Tub Chair',
+    category: 'Custom Sofa',
     tag: 'Bespoke Seating',
-    desc: 'Channel-tufted curved barrel club chair upholstered in vibrant teal velvet with metallic gold profile trim and tapered gold brass legs.',
+    desc: 'A stylish barrel-shaped accent chair featuring rich teal velvet upholstery, a curved backrest, and a decorative cushion. Its elegant silhouette adds a sophisticated touch to living rooms and lounge areas.',
   },
   {
     id: 5,
     image: imgMustardAccent,
     filename: 'gallery-mustard-accent-chair.jpg',
     title: 'Scandinavian Mustard Wingback Chair',
-    category: 'Accent Chairs',
+    category: 'Custom Sofa',
     tag: 'Accent Piece',
     desc: 'Mid-century modern accent armchair upholstered in rich ochre yellow velvet with tapered natural wood legs and designer graphic pillow.',
   },
@@ -81,16 +83,16 @@ const galleryData = [
     image: imgLiving,
     filename: 'project-living.png',
     title: 'The Royal Living Room',
-    category: 'Living Room',
+    category: 'Residential',
     tag: 'Turnkey Residential',
-    desc: 'Complete living room interior with custom brass fluting, LED cove ceiling lighting, and Italian marble TV backdrop.',
+    desc: 'A premium residential living room featuring coordinated seating, decorative wall panels, and contemporary interior detailing. The design creates a refined and comfortable atmosphere.',
   },
   {
     id: 7,
     image: imgSofa,
     filename: 'project-sofa.png',
     title: 'Sapphire Living Room Suite',
-    category: 'Custom Sofas',
+    category: 'Custom Sofa',
     tag: 'Deep Comfort',
     desc: 'Deep royal blue custom sofa collection engineered with heavy-duty hardwood structure and stain-resistant velvet fabric.',
   },
@@ -135,7 +137,7 @@ const galleryData = [
     image: imgAbout,
     filename: 'about-showroom.png',
     title: 'Reyansh Furniture Workshop & Atelier',
-    category: 'Custom Sofas',
+    category: 'Custom Sofa',
     tag: 'Craftsmanship',
     desc: 'A peek into our Pune manufacturing atelier — where precision woodworking, high-resilience foam cutting, and custom tailoring come to life.',
   },
@@ -186,13 +188,12 @@ const galleryData = [
   },
 ]
 
-const BASE_CATEGORIES = ['All', 'Custom Sofas', 'Accent Chairs', 'Living Room', 'Bedrooms', 'Dining', 'Kitchens']
+const BASE_CATEGORIES = ['All', 'Custom Sofa', 'Living Room', 'Bedrooms', 'Dining', 'Kitchens']
 
 export default function Gallery() {
   const { isAdmin } = useAuth()
   const [filter, setFilter] = useState('All')
-  const [lightbox, setLightbox] = useState(null)
-  const [zoomLevel, setZoomLevel] = useState(1)
+  const [selectedProject, setSelectedProject] = useState(null)
   const [enquiryModalItem, setEnquiryModalItem] = useState(null)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [customPhotos, setCustomPhotos] = useState([])
@@ -235,7 +236,14 @@ export default function Gallery() {
   ]
   const categories = [...BASE_CATEGORIES, ...extraCategories]
 
-  const filteredImages = filter === 'All' ? allPhotos : allPhotos.filter(item => item.category === filter)
+  const filteredImages = filter === 'All'
+    ? allPhotos
+    : allPhotos.filter(item => {
+        if (filter === 'Custom Sofa') {
+          return item.category === 'Custom Sofa' || item.category === 'Custom Sofas' || item.category === 'Accent Chairs'
+        }
+        return item.category === filter
+      })
 
   // Handle new photo added from modal
   const handlePhotoAdded = newItem => {
@@ -258,7 +266,9 @@ export default function Gallery() {
       localStorage.setItem('reyansh_custom_gallery', JSON.stringify(updated))
     } catch (err) {}
 
-    setLightbox(null)
+    if (selectedProject?.id === item.id) {
+      setSelectedProject(null)
+    }
 
     try {
       await fetch(apiUrl(`/api/gallery/${item.id}`), { method: 'DELETE' })
@@ -270,49 +280,46 @@ export default function Gallery() {
     setTimeout(() => setToastMessage(''), 3500)
   }
 
-  // Reset zoom when lightbox image changes
-  useEffect(() => { setZoomLevel(1) }, [lightbox])
+  // Open rich project details modal for any clicked card (curated or custom)
+  const handleOpenProject = (item) => {
+    const cleanTitle = (item.title || '').trim().toLowerCase()
+    const matched = allProjects.find(
+      (p) => p.title.trim().toLowerCase() === cleanTitle
+    )
 
-  // Keyboard navigation and body scroll lock for lightbox
-  useEffect(() => {
-    if (lightbox === null) return
-    const handleKeyDown = e => {
-      if (e.key === 'Escape') { setLightbox(null); setZoomLevel(1) }
-      if (e.key === 'ArrowLeft') {
-        setLightbox(curr => (curr - 1 + filteredImages.length) % filteredImages.length)
-      }
-      if (e.key === 'ArrowRight') {
-        setLightbox(curr => (curr + 1) % filteredImages.length)
-      }
-      if (e.key === '+' || e.key === '=') setZoomLevel(z => Math.min(4, +(z + 0.25).toFixed(2)))
-      if (e.key === '-') setZoomLevel(z => Math.max(0.5, +(z - 0.25).toFixed(2)))
-      if (e.key === '0') setZoomLevel(1)
+    if (matched) {
+      setSelectedProject({
+        ...matched,
+        image: item.image || matched.image,
+        category: item.category || matched.category,
+        description: item.desc || matched.description,
+        gallery: matched.gallery?.length ? matched.gallery : [item.image || matched.image],
+        id: item.id,
+        isCustom: item.isCustom,
+        filename: item.filename,
+      })
+    } else {
+      setSelectedProject({
+        title: item.title,
+        category: item.category || 'Custom Furniture',
+        description: item.desc || item.description || 'Custom handcrafted furniture design tailored to client specifications.',
+        image: item.image,
+        gallery: item.gallery?.length ? item.gallery : [item.image],
+        designStyle: item.designStyle || (item.tag ? `${item.tag} bespoke design` : null),
+        materials: item.materials || null,
+        customization: item.customization || 'Bespoke commission. Dimensions, fabric selection, and finishes can be tailored upon consultation.',
+        id: item.id,
+        isCustom: item.isCustom,
+        filename: item.filename,
+      })
     }
-    window.addEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = ''
-    }
-  }, [lightbox, filteredImages.length])
-
-  const currentItem = lightbox !== null ? filteredImages[lightbox] : null
-
-  const prev = () => { setLightbox(i => (i - 1 + filteredImages.length) % filteredImages.length); setZoomLevel(1) }
-  const next = () => { setLightbox(i => (i + 1) % filteredImages.length); setZoomLevel(1) }
-
-  // Wheel zoom handler for lightbox image
-  const handleLightboxWheel = e => {
-    e.preventDefault()
-    const delta = e.deltaY < 0 ? 0.15 : -0.15
-    setZoomLevel(z => Math.min(4, Math.max(0.5, +(z + delta).toFixed(2))))
   }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
       {/* Page Header with Add Photo CTA */}
       <div className="page-header">
-        <span className="label">Visual Showcase & Portfolio</span>
+        <span className="label">Visual Showcase &amp; Portfolio</span>
         <h1>Our <span>Gallery</span></h1>
         <p>Explore handcrafted custom sofas, luxury armchairs, and bespoke turnkey interior creations</p>
 
@@ -399,10 +406,7 @@ export default function Gallery() {
             {categories.map(cat => (
               <button
                 key={cat}
-                onClick={() => {
-                  setFilter(cat)
-                  setLightbox(null)
-                }}
+                onClick={() => setFilter(cat)}
                 className={`filter-btn ${filter === cat ? 'active' : ''}`}
                 style={{
                   padding: '9px 20px',
@@ -433,11 +437,11 @@ export default function Gallery() {
             }}
           >
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Showing <strong>{filteredImages.length}</strong> photo{filteredImages.length === 1 ? '' : 's'} in <strong>{filter}</strong>
+              Showing <strong>{filteredImages.length}</strong> design{filteredImages.length === 1 ? '' : 's'} in <strong>{filter}</strong>
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <span style={{ fontSize: '0.8rem', color: 'var(--gold)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Sparkles size={14} /> Click any photo for details & high-res view
+                <Sparkles size={14} /> Click any furniture card for large image &amp; design details
               </span>
               {isAdmin && (
                 <button
@@ -472,18 +476,27 @@ export default function Gallery() {
             </div>
           </div>
 
-          {/* Gallery Grid */}
+          {/* Gallery Grid - Every Card Fully Clickable */}
           <motion.div className="gallery-grid" layout>
             {filteredImages.map((item, i) => (
               <motion.div
                 className="gallery-item"
                 key={item.id}
                 layout
+                role="button"
+                tabIndex={0}
+                aria-label={`View project details for ${item.title}`}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: (i % 6) * 0.06 }}
-                onClick={() => setLightbox(i)}
+                transition={{ delay: (i % 6) * 0.05 }}
+                onClick={() => handleOpenProject(item)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleOpenProject(item)
+                  }
+                }}
                 style={{
                   borderRadius: 10,
                   overflow: 'hidden',
@@ -491,6 +504,7 @@ export default function Gallery() {
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-gold)',
                   boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+                  cursor: 'pointer',
                 }}
               >
                 <img
@@ -526,50 +540,52 @@ export default function Gallery() {
                   </div>
                 )}
 
-                {/* Always visible bottom badge with touch-friendly action cue */}
+                {/* Always visible bottom badge with title and details cue */}
                 <div
                   style={{
                     position: 'absolute',
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.5) 70%, transparent 100%)',
-                    padding: '24px 16px 12px',
-                    pointerEvents: 'none',
+                    background: 'linear-gradient(to top, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.6) 70%, transparent 100%)',
+                    padding: '28px 16px 14px',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 3,
+                    transition: 'background 0.3s ease',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                     <span style={{ fontSize: '0.7rem', color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 600 }}>
-                      {item.tag}
+                      {item.category || item.tag}
                     </span>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--gold)', fontWeight: 600 }}>
-                      Enquire &rarr;
+                    <span style={{ fontSize: '0.72rem', color: 'var(--gold)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Eye size={12} /> View Details &rarr;
                     </span>
                   </div>
-                  <h4 style={{ fontSize: '0.95rem', color: '#fff', margin: 0, fontWeight: 500, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+                  <h4 style={{ fontSize: '0.98rem', color: '#fff', margin: 0, fontWeight: 600, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
                     {item.title}
                   </h4>
                 </div>
 
-                {/* Hover overlay with zoom icon, quick enquiry and delete button */}
+                {/* Hover overlay with zoom icon and quick actions */}
                 <div className="g-overlay">
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                     <div
                       style={{
-                        background: 'rgba(10, 10, 10, 0.75)',
-                        borderRadius: '50%',
-                        padding: 10,
+                        background: 'rgba(10, 10, 10, 0.8)',
+                        borderRadius: '30px',
+                        padding: '8px 16px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        gap: 7,
                         border: '1px solid var(--gold)',
+                        color: 'var(--gold)',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
                       }}
-                      title="View High-Res Photo"
                     >
-                      <ZoomIn size={20} color="var(--gold)" />
+                      <ZoomIn size={16} /> View Large &amp; Details
                     </div>
 
                     <button
@@ -583,7 +599,7 @@ export default function Gallery() {
                         color: '#0a0a0a',
                         border: 'none',
                         borderRadius: '20px',
-                        padding: '7px 14px',
+                        padding: '8px 15px',
                         fontSize: '0.78rem',
                         fontWeight: 600,
                         display: 'inline-flex',
@@ -592,9 +608,9 @@ export default function Gallery() {
                         cursor: 'pointer',
                         boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
                       }}
-                      title="Send enquiry with this photo"
+                      title="Send quick enquiry with photo"
                     >
-                      <Mail size={13} /> Enquire
+                      <Mail size={13} /> Quick Enquiry
                     </button>
 
                     {item.isCustom && isAdmin && (
@@ -606,7 +622,7 @@ export default function Gallery() {
                           color: '#fff',
                           border: 'none',
                           borderRadius: '20px',
-                          padding: '7px 12px',
+                          padding: '8px 13px',
                           fontSize: '0.78rem',
                           fontWeight: 600,
                           display: 'inline-flex',
@@ -628,288 +644,16 @@ export default function Gallery() {
         </div>
       </section>
 
-      {/* Enhanced Lightbox Modal */}
-      <AnimatePresence>
-        {currentItem !== null && (
-          <motion.div
-            className="gallery-lightbox"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setLightbox(null)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 3000,
-              background: 'rgba(5, 5, 5, 0.95)',
-              backdropFilter: 'blur(8px)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '16px',
-              overflowY: 'auto',
-              WebkitOverflowScrolling: 'touch',
-            }}
-          >
-            {/* Top Bar with Counter and Close Button */}
-            <div
-              style={{
-                position: 'absolute',
-                top: 20,
-                left: 24,
-                right: 24,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                zIndex: 3010,
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div style={{ color: 'var(--gold)', fontSize: '0.9rem', fontWeight: 600, letterSpacing: 1 }}>
-                {lightbox + 1} / {filteredImages.length}
-              </div>
+      {/* Primary Project Details Modal (Opens for Any Clicked Card) */}
+      <ProjectDetailModal
+        project={selectedProject}
+        isOpen={Boolean(selectedProject)}
+        onClose={() => setSelectedProject(null)}
+        onDeleteCustomPhoto={item => handleDeleteCustomPhoto(item)}
+        isAdmin={isAdmin}
+      />
 
-              <button
-                className="close-btn"
-                onClick={() => setLightbox(null)}
-                aria-label="Close Lightbox"
-                style={{
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '50%',
-                  width: 44,
-                  height: 44,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-              >
-                <X size={22} />
-              </button>
-            </div>
-
-            {/* Prev / Next Navigation Buttons */}
-            <button
-              className="nav-btn prev"
-              onClick={e => {
-                e.stopPropagation()
-                prev()
-              }}
-              aria-label="Previous Image"
-              style={{
-                position: 'absolute',
-                left: 24,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                zIndex: 3010,
-              }}
-            >
-              <ChevronLeft size={26} />
-            </button>
-
-            <button
-              className="nav-btn next"
-              onClick={e => {
-                e.stopPropagation()
-                next()
-              }}
-              aria-label="Next Image"
-              style={{
-                position: 'absolute',
-                right: 24,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                zIndex: 3010,
-              }}
-            >
-              <ChevronRight size={26} />
-            </button>
-
-            {/* Main Image Container */}
-            <motion.div
-              key={currentItem.id}
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              onClick={e => e.stopPropagation()}
-              style={{
-                maxWidth: '900px',
-                width: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                maxHeight: '90vh',
-              }}
-            >
-              {/* Zoomable Image Wrapper — click to toggle zoom */}
-              <div
-                className="lb-zoom-wrapper"
-                onWheel={handleLightboxWheel}
-                onClick={() => setZoomLevel(z => z > 1 ? 1 : 2)}
-                style={{
-                  borderRadius: 12,
-                  overflow: zoomLevel > 1 ? 'auto' : 'hidden',
-                  border: '1px solid var(--border-gold)',
-                  boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
-                  background: '#0e0e11',
-                  maxHeight: '68vh',
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                  cursor: zoomLevel > 1 ? 'zoom-out' : 'zoom-in',
-                }}
-              >
-                <img
-                  src={currentItem.image}
-                  alt={currentItem.title}
-                  draggable={false}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '68vh',
-                    objectFit: 'contain',
-                    display: 'block',
-                    transition: 'transform 0.3s ease',
-                    transform: zoomLevel > 1 ? `scale(${zoomLevel})` : 'scale(1)',
-                    transformOrigin: 'center center',
-                    userSelect: 'none',
-                  }}
-                />
-              </div>
-
-              {/* Caption and Inquire Button */}
-              <div
-                style={{
-                  marginTop: 16,
-                  background: 'rgba(18, 19, 22, 0.95)',
-                  border: '1px solid var(--border-gold)',
-                  borderRadius: 10,
-                  padding: '16px 20px',
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 14,
-                }}
-              >
-                <div style={{ maxWidth: 560 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span
-                      style={{
-                        fontSize: '0.72rem',
-                        padding: '2px 8px',
-                        background: 'rgba(201, 169, 110, 0.15)',
-                        color: 'var(--gold)',
-                        borderRadius: 6,
-                        border: '1px solid rgba(201, 169, 110, 0.3)',
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {currentItem.category}
-                    </span>
-                    <h3 style={{ fontSize: '1.15rem', color: '#fff', margin: 0, fontFamily: 'var(--font-heading)' }}>
-                      {currentItem.title}
-                    </h3>
-                  </div>
-                  <p style={{ margin: 0, color: 'var(--text-muted-light)', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                    {currentItem.desc}
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => setEnquiryModalItem(currentItem)}
-                    className="btn-gold"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      fontSize: '0.85rem',
-                      padding: '9px 18px',
-                      background: 'var(--gold)',
-                      borderColor: 'var(--gold)',
-                      color: '#0a0a0a',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      borderRadius: 6,
-                      boxShadow: '0 4px 15px rgba(201, 169, 110, 0.3)',
-                    }}
-                  >
-                    <Mail size={16} /> Send Enquiry with Photo
-                  </button>
-
-                  <a
-                    href={`https://wa.me/917887556060?text=${encodeURIComponent(
-                      `Hi Reyansh Studio! 🛋️\n\nI'm inquiring about this design from your gallery:\n📌 *Product:* ${currentItem.title}\n📁 *Category:* ${currentItem.category}\n📝 *Details:* ${currentItem.desc}\n📸 *Photo:* ${typeof window !== 'undefined' ? `${window.location.origin}/assets/${currentItem.filename}` : ''}\n\nPlease share pricing, fabric options, and custom dimensions.`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-gold"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      fontSize: '0.85rem',
-                      padding: '9px 18px',
-                      textDecoration: 'none',
-                      background: '#25D366',
-                      borderColor: '#25D366',
-                      color: '#fff',
-                      fontWeight: 600,
-                      borderRadius: 6,
-                    }}
-                  >
-                    <MessageSquare size={16} /> Inquire on WhatsApp
-                  </a>
-
-                  {currentItem.isCustom && isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCustomPhoto(currentItem)}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        fontSize: '0.85rem',
-                        padding: '9px 16px',
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid rgba(239, 68, 68, 0.4)',
-                        color: '#fca5a5',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        borderRadius: 6,
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)'
-                        e.currentTarget.style.color = '#fff'
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'
-                        e.currentTarget.style.color = '#fca5a5'
-                      }}
-                      title="Remove this photo from gallery"
-                    >
-                      <Trash2 size={15} /> Remove Photo
-                    </button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Dedicated Enquiry with Photo Modal */}
+      {/* Dedicated Quick Photo Enquiry Modal */}
       <PhotoEnquiryModal
         item={enquiryModalItem}
         isOpen={Boolean(enquiryModalItem)}
@@ -958,3 +702,4 @@ export default function Gallery() {
     </motion.div>
   )
 }
+

@@ -1,19 +1,31 @@
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useInView } from 'react-intersection-observer'
 import { Eye } from 'lucide-react'
 
 export default function ProjectCard({ image, title, category, description, index = 0, onClick }) {
   const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.1 })
+  const reduceMotion = useReducedMotion()
+
+  const handleKeyDown = (e) => {
+    if (!onClick) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onClick()
+    }
+  }
 
   return (
-    <motion.div
+    <motion.article
       className="project-card"
       ref={ref}
       onClick={onClick}
-      style={{ cursor: 'pointer' }}
-      initial={{ opacity: 0, y: 30 }}
+      onKeyDown={handleKeyDown}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `View project: ${title}` : title}
+      initial={reduceMotion ? false : { opacity: 0, y: 30 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.5, delay: index * 0.08 }}
+      transition={{ duration: reduceMotion ? 0 : 0.5, delay: reduceMotion ? 0 : index * 0.08 }}
     >
       <img src={image} alt={title} loading="lazy" />
       <div className="overlay">
@@ -22,11 +34,13 @@ export default function ProjectCard({ image, title, category, description, index
         {description && (
           <p className="project-card-desc">{description}</p>
         )}
-        <span className="view-btn">
-          <Eye size={14} />
-          View Project
-        </span>
+        {onClick && (
+          <span className="view-btn">
+            <Eye size={14} />
+            View Project
+          </span>
+        )}
       </div>
-    </motion.div>
+    </motion.article>
   )
 }

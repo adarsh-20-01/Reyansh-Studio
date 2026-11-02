@@ -14,6 +14,31 @@ const __dirname = path.dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 5000
+const RATE_LIMIT_PER_WINDOW = Number(process.env.RATE_LIMIT_PER_WINDOW || 5)
+const RATE_LIMIT_WINDOW_SECONDS = Number(process.env.RATE_LIMIT_WINDOW_SECONDS || 600)
+const requestHistory = new Map()
+
+const FALLBACK_AI_PARAGRAPH =
+  'We have noted your enquiry and a designer from our studio will review your requirements personally. For questions about pricing, availability, delivery timelines, warranties, or customisation costs, our team will confirm the accurate details with you — we do not quote those figures automatically.'
+
+const isRateLimited = (ip) => {
+  const now = Date.now()
+  const cutoff = now - RATE_LIMIT_WINDOW_SECONDS * 1000
+  const stamps = (requestHistory.get(ip) || []).filter((t) => t > cutoff)
+  if (stamps.length >= RATE_LIMIT_PER_WINDOW) {
+    requestHistory.set(ip, stamps)
+    return true
+  }
+  stamps.push(now)
+  requestHistory.set(ip, stamps)
+  return false
+}
+
+const requireAdminToken = (req) => {
+  const authHeader = req.headers.authorization || ''
+  const token = req.query.token || (authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '')
+  return Boolean(token && String(token).startsWith('adm_'))
+}
 
 // Data directory and file paths
 const DATA_DIR = path.join(__dirname, 'data')
@@ -274,6 +299,9 @@ app.get('/api/stats', (req, res) => {
 
 // GET all consultations / leads
 app.get('/api/consultations', (req, res) => {
+  if (!requireAdminToken(req)) {
+    return res.status(401).json({ success: false, message: 'Administrator authentication required.' })
+  }
   const { status } = req.query
   let list = getConsultations()
   if (status && status !== 'all') {
@@ -474,6 +502,124 @@ const dispatchEnquiryEmail = async ({
   }
 }
 
+const generateAiReply = async ({ name, projectName, message }) => {
+  const apiKey = (process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '').trim()
+  if (!apiKey) return { text: null, status: 'unconfigured' }
+
+  const model = (process.env.AI_MODEL || 'gpt-4o-mini').trim()
+  const baseUrl = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 12000)
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.5,
+        max_tokens: 220,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You write brief, warm acknowledgement paragraphs for Reyanah Studio, a furniture and interior design studio in Pune. Use only verified facts: the studio offers custom furniture and interior design, and a human team will follow up. Never invent prices, discounts, delivery dates, warranties, bookings, refunds, or policies. If the customer asks about price, availability, timelines, warranties, or customisation costs, say the studio team will confirm those details. Do not mention AI, prompts, or internal systems. Keep to 2-4 sentences.',
+          },
+          {
+            role: 'user',
+            content: `Customer name: ${name}\nSelected project: ${projectName || 'General enquiry'}\nCustomer message:\n${message}`,
+          },
+        ],
+      }),
+      signal: controller.signal,
+    })
+    const data = await response.json().catch(() => null)
+    const text = data?.choices?.[0]?.message?.content?.trim()
+    if (!text) return { text: null, status: 'empty' }
+    return { text, status: 'ok' }
+  } catch (err) {
+    console.warn('[AI] Reply generation unavailable:', err.message || 'provider_error')
+    return { text: null, status: 'error' }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+const dispatchCustomerAcknowledgement = async ({ name, email, projectName, message }) => {
+  const apiKey = (process.env.RESEND_API_KEY || '').trim().replace(/^["']|["']$/g, '')
+  const rawSender = (process.env.VERIFIED_SENDER_EMAIL || process.env.SENDER_EMAIL || 'onboarding@resend.dev')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+
+  if (!apiKey) {
+    return { sent: false, status: 'skipped', mode: 'unconfigured' }
+  }
+
+  const ai = await generateAiReply({ name, projectName, message })
+  const mode = ai.text ? 'ai' : 'fallback'
+  const paragraph = ai.text || FALLBACK_AI_PARAGRAPH
+  const projectLabel = projectName || 'your furniture and interior design enquiry'
+  const safeName = name || 'Valued Client'
+
+  const textBody = `Dear ${safeName},
+
+Thank you for contacting Reyanah Studio and for your interest in our furniture and interior design services.
+
+We have successfully received your enquiry regarding ${projectLabel}. We truly appreciate your interest in our designs and customized furniture solutions.
+
+${paragraph}
+
+Our team will review your enquiry and get back to you as soon as possible. If additional information is required, we will contact you using the details you provided.
+
+Thank you for considering Reyanah Studio for your space. We look forward to assisting you in creating something beautiful.
+
+Warm regards,
+Team Reyanah Studio
+Furniture & Interior Design`
+
+  const htmlBody = `
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#14151a;color:#f3f4f6;border:1px solid #2a2a32;border-radius:12px;overflow:hidden;">
+      <div style="padding:28px 24px;border-bottom:2px solid #c9a96e;background:linear-gradient(135deg,#1b1710,#262014);">
+        <h1 style="margin:0;color:#c9a96e;letter-spacing:2px;font-size:20px;">REYANAH STUDIO</h1>
+        <p style="margin:8px 0 0;color:#d1d5db;font-size:13px;">Furniture &amp; Interior Design</p>
+      </div>
+      <div style="padding:28px 24px;line-height:1.7;font-size:15px;color:#e5e7eb;">
+        ${escapeHtml(textBody).replace(/\n/g, '<br />')}
+      </div>
+    </div>
+  `
+
+  let formattedSender = rawSender
+  if (!rawSender.includes('<') && !rawSender.includes('"')) {
+    formattedSender = `Reyanah Studio <${rawSender}>`
+  }
+
+  try {
+    const resend = new Resend(apiKey)
+    const response = await resend.emails.send({
+      from: formattedSender,
+      to: [email],
+      subject: 'Thank You for Contacting Reyanah Studio',
+      text: textBody,
+      html: htmlBody,
+    })
+    if (response.error) {
+      console.warn('[EMAIL] Customer acknowledgement rejected:', response.error.message || 'ResendError')
+      return { sent: false, status: 'failed', mode }
+    }
+    if (response.data?.id) {
+      return { sent: true, status: 'sent', mode, aiStatus: ai.status, messageId: response.data.id }
+    }
+    return { sent: false, status: 'failed', mode }
+  } catch (err) {
+    console.warn('[EMAIL] Customer acknowledgement failed:', err.message || 'provider_error')
+    return { sent: false, status: 'failed', mode }
+  }
+}
+
 // POST endpoint for contact forms, photo enquiries, and consultation bookings
 app.post(
   ['/api/contact', '/api/contact/', '/api/consultation', '/api/consultations', '/api/enquiry', '/api/enquiries'],
@@ -482,8 +628,20 @@ app.post(
     try {
       const body = req.body || {}
 
+      const clientIp = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown')
+        .toString()
+        .split(',')[0]
+        .trim()
+      if (isRateLimited(clientIp)) {
+        return res.status(429).json({
+          success: false,
+          message:
+            'Too many requests. Please wait a few minutes before submitting another enquiry, or contact us directly on WhatsApp.',
+        })
+      }
+
       // Honeypot spam trap
-      if (body._gotcha || body._hp_trap || body.honeypot) {
+      if (body._gotcha || body._hp_trap || body.honeypot || body.website) {
         return res.status(400).json({ success: false, message: 'Invalid submission.' })
       }
 
@@ -494,7 +652,7 @@ app.post(
       const message = (body.message || '').trim()
 
       // Optional design & photo fields
-      const product_title = (body.product_title || body.productTitle || '').trim()
+      const product_title = (body.product_title || body.productTitle || body.project || '').trim()
       const photo_url = (body.photo_url || body.photoUrl || '').trim()
       const photo_filename = (
         body.photo_filename ||
@@ -535,6 +693,7 @@ app.post(
           saved: true,
           id: existingLead.id,
           emailSent: existingLead.emailSent,
+          autoReplySent: Boolean(existingLead.autoReplySent),
           duplicatePrevented: true,
           message: 'Your enquiry is already safely received and recorded in our studio database. Our team will contact you shortly.',
           notice: existingLead.emailSent
@@ -558,6 +717,7 @@ app.post(
         service: service || 'General Consultation',
         message,
         product_title: product_title || '',
+        project: product_title || '',
         photo_filename: photo_filename || '',
         photo_url: photo_url || '',
         has_photo: Boolean(req.file || photo_data || photo_filename),
@@ -565,20 +725,17 @@ app.post(
         formattedDate,
         status: 'new',
         emailSent: false,
+        notificationEmailStatus: 'pending',
+        autoReplySent: false,
+        autoReplyStatus: 'pending',
       }
 
       const currentLeads = getConsultations()
       currentLeads.unshift(newLead)
       saveConsultations(currentLeads)
 
-      console.log(`\n📬 [NEW ENQUIRY RECEIVED]`)
-      console.log(`   Client  : ${newLead.name}`)
-      console.log(`   Phone   : ${newLead.phone || 'N/A'}`)
-      console.log(`   Email   : ${newLead.email}`)
-      console.log(`   Service : ${newLead.service}`)
+      console.log(`\n📬 [NEW ENQUIRY RECEIVED] id=${newLead.id} service=${newLead.service}`)
       if (product_title) console.log(`   Design  : ${product_title}`)
-      if (photo_filename) console.log(`   Photo   : ${photo_filename}`)
-      console.log(`   Message : ${newLead.message.slice(0, 100)}...\n`)
 
       // 3. Prepare attachments for email
       const attachments = []
@@ -620,26 +777,52 @@ app.post(
         photo_url,
       })
 
+      let autoReply = { sent: false, status: 'skipped' }
+      const updatedList = getConsultations()
+      const idx = updatedList.findIndex(c => c.id === newLead.id)
+
       if (emailResult.sent) {
         newLead.emailSent = true
+        newLead.notificationEmailStatus = 'sent'
         newLead.messageId = emailResult.messageId
-        const updatedList = getConsultations()
-        const idx = updatedList.findIndex(c => c.id === newLead.id)
+        autoReply = await dispatchCustomerAcknowledgement({
+          name,
+          email,
+          projectName: product_title,
+          message,
+        })
+        newLead.autoReplySent = Boolean(autoReply.sent)
+        newLead.autoReplyStatus = autoReply.status
+        newLead.autoReplyMode = autoReply.mode
         if (idx !== -1) {
           updatedList[idx].emailSent = true
+          updatedList[idx].notificationEmailStatus = 'sent'
           updatedList[idx].messageId = emailResult.messageId
+          updatedList[idx].autoReplySent = newLead.autoReplySent
+          updatedList[idx].autoReplyStatus = autoReply.status
+          updatedList[idx].autoReplyMode = autoReply.mode
           saveConsultations(updatedList)
         }
       } else {
         newLead.emailSent = false
+        newLead.notificationEmailStatus = 'failed'
         newLead.emailNote = emailResult.error || 'Email skipped or pending configuration'
-        const updatedList = getConsultations()
-        const idx = updatedList.findIndex(c => c.id === newLead.id)
+        newLead.autoReplyStatus = 'skipped'
         if (idx !== -1) {
           updatedList[idx].emailSent = false
+          updatedList[idx].notificationEmailStatus = 'failed'
           updatedList[idx].emailNote = newLead.emailNote
+          updatedList[idx].autoReplyStatus = 'skipped'
           saveConsultations(updatedList)
         }
+      }
+
+      const publicLead = {
+        id: newLead.id,
+        status: newLead.status,
+        emailSent: Boolean(emailResult.sent),
+        autoReplySent: Boolean(autoReply.sent),
+        has_photo: Boolean(req.file || photo_data || photo_filename),
       }
 
       // 5. Always return a timely, valid JSON response with HTTP 200
@@ -650,8 +833,9 @@ app.post(
           ? 'Enquiry received successfully! Our team will contact you shortly.'
           : 'Thank you! Your enquiry has been received and safely saved in our studio database. Our team will contact you shortly.',
         id: newLead.id,
-        lead: newLead,
+        lead: publicLead,
         emailSent: Boolean(emailResult.sent),
+        autoReplySent: Boolean(autoReply.sent),
         has_photo: Boolean(req.file || photo_data || photo_filename),
         notice: emailResult.sent
           ? undefined
@@ -662,7 +846,6 @@ app.post(
       return res.status(500).json({
         success: false,
         message: 'Failed to process enquiry request.',
-        error: error.message,
       })
     }
   }
@@ -670,6 +853,9 @@ app.post(
 
 // Update consultation status (e.g. mark as contacted / completed)
 app.patch('/api/consultations/:id', (req, res) => {
+  if (!requireAdminToken(req)) {
+    return res.status(401).json({ success: false, message: 'Administrator authentication required.' })
+  }
   const { id } = req.params
   const { status, notes } = req.body
 
@@ -690,6 +876,9 @@ app.patch('/api/consultations/:id', (req, res) => {
 
 // Delete a consultation lead
 app.delete('/api/consultations/:id', (req, res) => {
+  if (!requireAdminToken(req)) {
+    return res.status(401).json({ success: false, message: 'Administrator authentication required.' })
+  }
   const { id } = req.params
   const list = getConsultations()
   const filtered = list.filter(c => c.id !== id)
